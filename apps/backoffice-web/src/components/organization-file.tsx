@@ -50,8 +50,10 @@ import {
 import { statusLabel, statusTone } from '@/lib/organization-directory'
 import {
   IDENTIFIERS_NOTE,
-  NOT_MODELLED_ITEMS,
-  NOT_MODELLED_NOTE,
+  NO_PLANS_NOTE,
+  paymentMethodLine,
+  planLine,
+  premiumLine,
   fileMessage,
   handsOverHere,
   memberCardHref,
@@ -64,6 +66,8 @@ import {
 import { formatInstant } from '@/lib/platform-access'
 
 import { OrganizationClientInvitations } from './organization-client-invitations'
+import { OrganizationGuestQuotaPanel } from './organization-guest-quota'
+import { OrganizationSuspensionPanel } from './organization-suspension'
 import { OrganizationTeamInvitations } from './organization-team-invitations'
 
 type LoadState = 'loading' | 'ready' | 'failed'
@@ -281,17 +285,38 @@ export function OrganizationFile({ organizationId }: { organizationId: string })
         </CardContent>
       </Card>
 
-      <Alert live="off" variant="info" data-file-not-modelled>
-        <AlertTitle>Lo que Allfit todavía no guarda</AlertTitle>
-        <AlertDescription>
-          <ul>
-            {NOT_MODELLED_ITEMS.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          {NOT_MODELLED_NOTE}
-        </AlertDescription>
-      </Alert>
+      <Card data-file-plans>
+        <CardHeader>
+          <CardTitle role="heading" aria-level={3}>
+            Planes y cobro
+          </CardTitle>
+          <CardDescription>
+            Lo que el gimnasio le cobra a sus clientes, en su propia pasarela. El dinero no pasa por
+            Allfit y aquí no hay ninguna credencial.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {file.plans.length === 0 ? (
+            <p data-file-no-plans>{NO_PLANS_NOTE}</p>
+          ) : (
+            <ul>
+              {file.plans.map((plan) => (
+                <li key={plan.plan_id} data-file-plan={plan.plan_id}>
+                  <strong>{plan.name}</strong> · {planLine(plan)}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p data-file-payment-method>{paymentMethodLine(file)}</p>
+          <p data-file-premium>{premiumLine(file)}</p>
+        </CardContent>
+      </Card>
+
+      <OrganizationGuestQuotaPanel quota={file.guest_quota} />
+      <OrganizationSuspensionPanel
+        suspension={file.suspension}
+        peopleServed={file.relationship_counts.active}
+      />
 
       <Link href="/organizations" data-handover-link>
         Volver al directorio

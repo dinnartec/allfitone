@@ -29,6 +29,8 @@ export type BackofficeOrganizationPage = AllfitV1Schemas['BackofficeOrganization
 export type OrganizationHandover = AllfitV1Schemas['OrganizationHandover']
 export type BackofficeOrganizationFile = AllfitV1Schemas['BackofficeOrganizationFile']
 export type OrganizationHandoverCreate = AllfitV1Schemas['OrganizationHandoverCreate']
+export type OrganizationGuestQuota = AllfitV1Schemas['OrganizationGuestQuota']
+export type OrganizationGuestQuotaDecision = AllfitV1Schemas['OrganizationGuestQuotaDecision']
 export type BackofficeClientInvitation = AllfitV1Schemas['BackofficeClientInvitation']
 export type BackofficeClientInvitationList = AllfitV1Schemas['BackofficeClientInvitationList']
 export type BackofficeClientInvitationResend = AllfitV1Schemas['BackofficeClientInvitationResend']
@@ -43,6 +45,10 @@ export type CredentialRenewalDue = AllfitV1Schemas['CredentialRenewalDue']
 export type BreakGlassRequest = AllfitV1Schemas['BreakGlassRequest']
 export type BreakGlassRequestCreate = AllfitV1Schemas['BreakGlassRequestCreate']
 export type BreakGlassExerciseOutcome = AllfitV1Schemas['BreakGlassExerciseOutcome']
+export type BreakGlassReview = AllfitV1Schemas['BreakGlassReview']
+export type OrganizationSuspension = AllfitV1Schemas['OrganizationSuspension']
+export type OrganizationSuspensionReason = AllfitV1Schemas['OrganizationSuspensionReason']
+export type BreakGlassReviewOutcome = AllfitV1Schemas['BreakGlassReviewOutcome']
 export type ScopeDefinition = AllfitV1Schemas['ScopeDefinition']
 export type ScopeDefinitionPublication = AllfitV1Schemas['ScopeDefinitionPublication']
 export type SupportOperation = AllfitV1Schemas['SupportOperation']
@@ -56,6 +62,7 @@ export type PlatformPlan = AllfitV1Schemas['PlatformPlan']
 export type PlatformPlanCreate = AllfitV1Schemas['PlatformPlanCreate']
 export type PlatformPlanVersionProposal = AllfitV1Schemas['PlatformPlanVersionProposal']
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type SupportPersonPayments = AllfitV1Schemas['SupportPersonPayments']
 export type BackofficeAccountRecovery = AllfitV1Schemas['BackofficeAccountRecovery']
 export type BackofficeAccountRecoveryRequest = AllfitV1Schemas['BackofficeAccountRecoveryRequest']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
@@ -282,6 +289,14 @@ export const backofficeApi = {
   supportPersonMetadata: (personId: string, caseReference: string, signal?: AbortSignal) =>
     requestJson<SupportPersonMetadata>(
       `/backoffice/v1/support/people/${personId}${query({ case_reference: caseReference })}`,
+      signal ? { signal } : {},
+    ),
+
+  // Its own read because it is its own duty: `view_billing_metadata` opens this and
+  // the duty that opens the card does not.
+  supportPersonPayments: (personId: string, caseReference: string, signal?: AbortSignal) =>
+    requestJson<SupportPersonPayments>(
+      `/backoffice/v1/support/people/${personId}/payments${query({ case_reference: caseReference })}`,
       signal ? { signal } : {},
     ),
 
@@ -538,6 +553,20 @@ export const backofficeApi = {
       { method: 'POST', headers: commandHeaders(command) },
     ),
 
+  setOrganizationGuestQuota: (
+    organizationId: string,
+    decision: OrganizationGuestQuotaDecision,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<OrganizationGuestQuota>(
+      `/backoffice/v1/organizations/${organizationId}/guest-quota`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify(decision),
+      },
+    ),
+
   cancelOrganizationHandover: (organizationId: string, command: BackofficeCommand) =>
     requestJson<OrganizationHandover>(
       `/backoffice/v1/organizations/${organizationId}/cancellation`,
@@ -594,6 +623,43 @@ export const backofficeApi = {
       `/backoffice/v1/break-glass/requests/${requestId}/reads`,
       { method: 'POST', body: JSON.stringify(exercise) },
     ),
+
+  suspendOrganization: (
+    organizationId: string,
+    reason: OrganizationSuspensionReason,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<OrganizationSuspension>(
+      `/backoffice/v1/organizations/${organizationId}/suspension`,
+      {
+        method: 'POST',
+        headers: commandHeaders(command),
+        body: JSON.stringify({ reason_code: reason }),
+      },
+    ),
+
+  reactivateOrganization: (organizationId: string, command: BackofficeCommand) =>
+    requestJson<OrganizationSuspension>(
+      `/backoffice/v1/organizations/${organizationId}/reactivation`,
+      { method: 'POST', headers: commandHeaders(command), body: '{}' },
+    ),
+
+  breakGlassReviewQueue: (signal?: AbortSignal) =>
+    requestJson<{ items: BreakGlassReview[] }>(
+      '/backoffice/v1/break-glass/reviews',
+      signal ? { signal } : {},
+    ),
+
+  reviewBreakGlass: (
+    requestId: string,
+    outcome: BreakGlassReviewOutcome,
+    command: BackofficeCommand,
+  ) =>
+    requestJson<BreakGlassReview>(`/backoffice/v1/break-glass/requests/${requestId}/review`, {
+      method: 'POST',
+      headers: commandHeaders(command),
+      body: JSON.stringify({ outcome }),
+    }),
 
   closeBreakGlass: (requestId: string, command: BackofficeCommand) =>
     requestJson<BreakGlassRequest>(`/backoffice/v1/break-glass/requests/${requestId}/closure`, {
@@ -754,6 +820,9 @@ function organizationOperation(route: string, method: string): ClientOperation |
       : 'backoffice.organization.team_invitations'
   }
   if (segments[4] === 'cancellation') return 'backoffice.organization.handover_cancel'
+  if (segments[4] === 'guest-quota') return 'backoffice.organization.guest_quota_set'
+  if (segments[4] === 'suspension') return 'backoffice.organization.suspended'
+  if (segments[4] === 'reactivation') return 'backoffice.organization.reactivated'
   if (segments[4] !== 'handover') return undefined
   return segments[5] === 'resends'
     ? 'backoffice.organization.handover_resend'
@@ -766,8 +835,13 @@ function breakGlassOperation(route: string): ClientOperation | undefined {
   if (segments[0] !== 'backoffice' || segments[1] !== 'v1' || segments[2] !== 'break-glass') {
     return undefined
   }
-  if (segments.length === 4) return 'backoffice.break_glass.list'
+  if (segments.length === 4) {
+    return segments[3] === 'reviews'
+      ? 'backoffice.break_glass.review_queue'
+      : 'backoffice.break_glass.list'
+  }
   if (segments[5] === 'decisions') return 'backoffice.break_glass.decide'
+  if (segments[5] === 'review') return 'backoffice.break_glass.review'
   if (segments[5] === 'reads') return 'backoffice.break_glass.exercise'
   if (segments[5] === 'closure') return 'backoffice.break_glass.close'
   return undefined

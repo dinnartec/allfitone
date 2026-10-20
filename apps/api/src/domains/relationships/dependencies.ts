@@ -6,6 +6,9 @@ import {
   createRelationshipHistoryService,
   createRelationshipStateService,
   createSubstitutionProposalService,
+  createSubstitutionTerminationService,
+  createSubstitutionListService,
+  createRelationshipTerminationService,
   type ClientDirectoryService,
   type MyRelationshipService,
   type HolderAssignmentService,
@@ -13,6 +16,9 @@ import {
   type RelationshipHistoryService,
   type RelationshipStateService,
   type SubstitutionProposalService,
+  type SubstitutionTerminationService,
+  type SubstitutionListService,
+  type RelationshipTerminationService,
 } from './application/index.js'
 import {
   createClientDirectoryDatabase,
@@ -22,6 +28,9 @@ import {
   createRelationshipHistoryDatabase,
   createRelationshipStateDatabase,
   createSubstitutionProposalDatabase,
+  createSubstitutionTerminationDatabase,
+  createSubstitutionListDatabase,
+  createRelationshipTerminationDatabase,
 } from './infrastructure/index.js'
 
 let cached: ClientDirectoryService | undefined
@@ -31,6 +40,9 @@ let cachedStates: RelationshipStateService | undefined
 let cachedReassignments: HolderReassignmentService | undefined
 let cachedHistories: RelationshipHistoryService | undefined
 let cachedSubstitutions: SubstitutionProposalService | undefined
+let cachedTerminations: SubstitutionTerminationService | undefined
+let cachedSubstitutionPages: SubstitutionListService | undefined
+let cachedTerminatedRelationships: RelationshipTerminationService | undefined
 
 export function clientDirectoryService(): ClientDirectoryService {
   cached ??= createClientDirectoryService(createClientDirectoryDatabase())
@@ -60,6 +72,25 @@ export function relationshipHistoryService(): RelationshipHistoryService {
 export function substitutionProposalService(): SubstitutionProposalService {
   cachedSubstitutions ??= createSubstitutionProposalService(createSubstitutionProposalDatabase())
   return cachedSubstitutions
+}
+
+export function substitutionTerminationService(): SubstitutionTerminationService {
+  cachedTerminations ??= createSubstitutionTerminationService(
+    createSubstitutionTerminationDatabase(),
+  )
+  return cachedTerminations
+}
+
+export function substitutionListService(): SubstitutionListService {
+  cachedSubstitutionPages ??= createSubstitutionListService(createSubstitutionListDatabase())
+  return cachedSubstitutionPages
+}
+
+export function relationshipTerminationService(): RelationshipTerminationService {
+  cachedTerminatedRelationships ??= createRelationshipTerminationService(
+    createRelationshipTerminationDatabase(),
+  )
+  return cachedTerminatedRelationships
 }
 
 export function myRelationshipService(): MyRelationshipService {

@@ -54,6 +54,9 @@ import { useParams } from 'next/navigation'
 import { useOrganizationContext } from './organization-context'
 import { RelationshipHolderChange } from './relationship-holder-change'
 import { RelationshipHolderForm } from './relationship-holder-form'
+import { RelationshipSubstitutionEnd } from './relationship-substitution-end'
+import { RelationshipSubstitutionPropose } from './relationship-substitution-propose'
+import { RelationshipTermination } from './relationship-termination'
 import { WorkspacePageHeader } from './workspace-page-header'
 import { clientInitials, seesEveryClient } from '@/lib/client-directory'
 import {
@@ -69,6 +72,14 @@ import {
   substitutionStatusLabel,
   substitutionStatusTone,
 } from '@/lib/relationship-state'
+import {
+  canEndSubstitution,
+  canProposeSubstitution,
+  coversThatStillMatterFirst,
+  coversAvailable,
+  seesEverySubstitution,
+} from '@/lib/relationship-substitution'
+import { canTerminateRelationship } from '@/lib/relationship-termination'
 import { useCompactViewport } from '@/lib/use-compact-viewport'
 import type {
   OrganizationMembership,
@@ -100,11 +111,18 @@ export function RelationshipStateScreen() {
   const mayAssign = canAssignProfessionals(current.roles, rolesQuery.data?.items)
   const directoryPath = `/organizations/${current.organization_id}/clients`
   /*
-   * Only fetched for somebody who may assign, and only while nobody is in
-   * charge. A reader of the relationship has no reason to pull the team roster
+   * Only fetched for somebody who could act on it, and only while the link is
+   * live. A reader of the relationship has no reason to pull the team roster
    * down, and the command would refuse them anyway.
+   *
+   * The holder is here too, and is the reason this is not simply `mayAssign`:
+   * `OP-REL-004` lets them propose their own cover, so they need the list of
+   * who could take it even without the capability to assign anybody.
    */
-  const needsCoaches = mayAssign && query.data?.status === 'active'
+  const isHolderOfThis =
+    query.data?.holder?.membership_id !== undefined &&
+    query.data.holder.membership_id === current.membership_id
+  const needsCoaches = (mayAssign || isHolderOfThis) && query.data?.status === 'active'
   const coachesQuery = useInfiniteQuery({
     ...organizationMembershipsQueryOptions(current.organization_id, 'active', COACH_PAGE_SIZE),
     enabled: needsCoaches,
@@ -161,6 +179,8 @@ export function RelationshipStateScreen() {
       <ProfessionalsPanel
         relationship={relationship}
         everyClient={everyClient}
+        viewerMembershipId={current.membership_id}
+        mayAssignProfessionals={mayAssign}
         organizationId={current.organization_id}
         roster={
           needsCoaches
@@ -172,6 +192,16 @@ export function RelationshipStateScreen() {
         }
       />
       <GrantsPanel grants={relationship.grants} compact={compact} />
+      {canTerminateRelationship({
+        mayAssignProfessionals: mayAssign,
+        relationshipActive: relationship.status === 'active',
+      }) ? (
+        <RelationshipTermination
+          organizationId={current.organization_id}
+          relationship={relationship}
+          clientName={relationship.display_name}
+        />
+      ) : null}
     </div>
   )
 }
@@ -222,17 +252,34 @@ function LinkPanel({ relationship }: { relationship: RelationshipState }) {
 function ProfessionalsPanel({
   relationship,
   everyClient,
+  viewerMembershipId,
+  mayAssignProfessionals,
   organizationId,
   roster,
 }: {
   relationship: RelationshipState
   everyClient: boolean
+  /* Being the holder is an identity, not a role, so no capability answers it. */
+  viewerMembershipId: string
+  mayAssignProfessionals: boolean
   organizationId: string
   /* Only present for a reader who may assign, on a live relationship. */
   roster: { memberships: readonly OrganizationMembership[]; loading: boolean } | null
 }) {
   const { holder, substitutions } = relationship
   const active = relationship.status === 'active'
+  const isHolder = holder?.membership_id === viewerMembershipId
+  /*
+   * `OP-REL-004` accepts the holder as well as an administrator — they are the
+   * one who knows they will be away. No other action on this card works that
+   * way, so this cannot ride on `roster` alone.
+   */
+  const mayPropose = canProposeSubstitution({
+    isHolder,
+    mayAssignProfessionals,
+    relationshipActive: active,
+    hasHolder: Boolean(holder),
+  })
   return (
     <Card data-relationship-professionals>
       <CardHeader>
@@ -308,20 +355,45 @@ function ProfessionalsPanel({
         )}
 
         <div data-relationship-substitutions>
-          <h3 data-relationship-subheading>Suplencias</h3>
+          <div data-relationship-substitutions-head>
+            <h3 data-relationship-subheading>Suplencias</h3>
+            {mayPropose && holder && roster ? (
+              <RelationshipSubstitutionPropose
+                organizationId={organizationId}
+                relationshipId={relationship.relationship_id}
+                holderName={holder.display_name}
+                coaches={coversAvailable(roster.memberships, holder.membership_id)}
+                loadingCoaches={roster.loading}
+              />
+            ) : null}
+          </div>
           {substitutions.length === 0 ? (
             <p data-relationship-no-substitutions>
-              {everyClient
+              {seesEverySubstitution({ everyClient, isHolder })
                 ? 'No hay suplencias registradas en este vínculo.'
-                : /* The honest sentence for a coach. The policy shows them their
-                     own assignment and not the others, so "no hay" would be a
-                     claim this screen cannot make. */
+                : /* The honest sentence for a reader who is neither the holder
+                     nor an administrator — an accepted substitute, say. The
+                     policy shows them their own assignment and not the others,
+                     so "no hay" would be a claim this screen cannot make.
+                     Since STUDIO-94 the holder does see them all, so they get
+                     the definite sentence above. */
                   'No ves suplencias de este vínculo. Tu rol muestra solo tu propia asignación, así que puede haber otras.'}
             </p>
           ) : (
             <ul data-relationship-substitution-list aria-label="Suplencias del vínculo">
-              {substitutions.map((substitution) => (
-                <SubstitutionRow key={substitution.assignment_id} substitution={substitution} />
+              {coversThatStillMatterFirst(substitutions).map((substitution) => (
+                <SubstitutionRow
+                  key={substitution.assignment_id}
+                  substitution={substitution}
+                  organizationId={organizationId}
+                  relationshipId={relationship.relationship_id}
+                  holderName={holder?.display_name ?? 'el profesional responsable'}
+                  mayEnd={canEndSubstitution({
+                    mayAssignProfessionals,
+                    relationshipActive: active,
+                    status: substitution.status,
+                  })}
+                />
               ))}
             </ul>
           )}
@@ -331,7 +403,24 @@ function ProfessionalsPanel({
   )
 }
 
-function SubstitutionRow({ substitution }: { substitution: RelationshipSubstitution }) {
+function SubstitutionRow({
+  substitution,
+  organizationId,
+  relationshipId,
+  holderName,
+  mayEnd,
+}: {
+  substitution: RelationshipSubstitution
+  organizationId: string
+  relationshipId: string
+  holderName: string
+  /*
+   * Decided by the card, not here: the rule needs the relationship's state and
+   * the reader's capability, and a row that worked it out for itself would be
+   * a second copy of `OP-REL-006`'s actors to drift from the first.
+   */
+  mayEnd: boolean
+}) {
   return (
     <li data-relationship-substitution>
       <div data-relationship-substitution-identity>
@@ -341,6 +430,15 @@ function SubstitutionRow({ substitution }: { substitution: RelationshipSubstitut
       <Badge variant={substitutionStatusTone(substitution.status)}>
         {substitutionStatusLabel(substitution.status)}
       </Badge>
+      {mayEnd ? (
+        <RelationshipSubstitutionEnd
+          organizationId={organizationId}
+          relationshipId={relationshipId}
+          substitutionId={substitution.assignment_id}
+          substituteName={substitution.display_name}
+          holderName={holderName}
+        />
+      ) : null}
     </li>
   )
 }
@@ -565,11 +663,39 @@ function versionLabel(grant: RelationshipGrant): string {
   return `Versión ${grant.version_number} del permiso`
 }
 
+/**
+ * Both ends of this sentence are calendar days, so both are read as days.
+ *
+ * A substitution's `valid_from` looks like an instant and is not: `OP-REL-004`
+ * stores the day it was given as midnight UTC. Formatted in the reader's own
+ * zone that is the evening before, so a cover starting on the 14th was shown
+ * starting on the 13th anywhere west of Greenwich — Colombia included. It is
+ * the same defect `formatCalendarDay` exists to avoid, on the other half of
+ * the same sentence.
+ */
 function substitutionWindow(substitution: RelationshipSubstitution): string {
-  const from = formatDate(substitution.valid_from)
+  const from = substitutionStart(substitution.valid_from)
   return substitution.ends_on
     ? `Del ${from} al ${formatCalendarDay(substitution.ends_on)}`
     : `Desde ${from}`
+}
+
+/**
+ * A substitution's start looks like an instant and is not: `OP-REL-004` stores
+ * the day it was given as midnight UTC. Formatted in the reader's own zone that
+ * is the evening before, so a cover starting on the 14th was shown starting on
+ * the 13th anywhere west of Greenwich — Colombia included. The same defect
+ * `formatCalendarDay` exists to avoid, on the other half of the same sentence.
+ *
+ * The day is taken from the instant in UTC rather than from the text, because
+ * PostgreSQL writes a `timestamptz` into JSON using its session timezone: the
+ * same midnight arrives as `...T00:00:00+00:00` or `...T19:00:00-05:00`
+ * depending on a server setting, and only one of those starts with the day.
+ */
+function substitutionStart(instant: string): string {
+  const parsed = new Date(instant)
+  if (Number.isNaN(parsed.getTime())) return instant
+  return formatCalendarDay(parsed.toISOString().slice(0, 10))
 }
 
 function formatDate(value: string): string {

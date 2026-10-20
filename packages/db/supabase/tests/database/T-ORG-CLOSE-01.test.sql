@@ -25,10 +25,15 @@ select plan(5);
 -- Naming all of them, rather than asserting that no name matches `terminate%`, is the
 -- point: a closure called anything at all breaks this, and whoever adds a function to
 -- `relationships` has to say out loud that theirs is not one. It has already worked
--- four times — `read_relationship_state` and `reassign_relationship_holder` arrived with
+-- five times — `read_relationship_state` and `reassign_relationship_holder` arrived with
 -- `AFO-54`/`AFO-57`, `read_relationship_history` with `AFO-55`,
--- `propose_substitution` with `AFO-58` and `list_my_relationships` with `OP-REL-012`;
--- each landed here before it landed anywhere else.
+-- `propose_substitution` with `AFO-58`, `list_my_relationships` with `OP-REL-012` and
+-- `relationship_assignment_is_visible` with `STUDIO-94`; each landed here before it
+-- landed anywhere else.
+--
+-- The last one is not an operation. It is the assignment read policy's predicate,
+-- lifted into a function so the policy reads as one line, and the runtime holds
+-- EXECUTE because a policy is evaluated as whoever is reading.
 --
 -- `list_my_relationships` is a read the **person** performs over her own rows, and it is
 -- what makes everything about one of her gyms reachable from Space at all. It ends
@@ -51,10 +56,14 @@ select is(
        and routine.prokind = 'f'
        and has_function_privilege('allfit_api', routine.oid, 'EXECUTE')
    ) as runnable),
-  'actor_is_assigned, assign_relationship_holder, list_my_relationships, '
-    || 'list_organization_clients, propose_substitution, read_relationship_history, '
-    || 'read_relationship_state, reassign_relationship_holder',
-  'the runtime reaches eight relationship functions, and ending one is not among them'
+  'actor_is_assigned, assign_relationship_holder, end_substitution, '
+    || 'list_my_relationships, list_organization_clients, '
+    || 'list_relationship_substitutions, propose_substitution, '
+    || 'read_relationship_history, read_relationship_state, '
+    || 'reassign_relationship_holder, relationship_assignment_is_visible, '
+    || 'terminate_relationship',
+  'the runtime reaches twelve relationship functions, ending a relationship '
+    || 'among them at last'
 );
 
 -- ---------------------------------------------------------------------------
@@ -85,13 +94,19 @@ select is(
 
 -- `cancelled` is the state a gym nobody claimed reaches through `HU-BO-015`, which is
 -- a different thing from ending the relationships of one that operates.
+--
+-- `suspended` arrived with `HU-BO-016` and does not weaken what this asserts. The
+-- state this file rules out is a *terminal* one that lets Allfit end a gym over its
+-- head; suspension is the opposite of terminal, reverses with `OP-ORG-025`, and ends
+-- no relationship — `T-ORG-SUSPEND-01` is where that is proved. Both assertions above
+-- still hold: no closure table, and no column marking a gym closed by Allfit.
 select is(
   (select string_agg(label.enumlabel::text collate "C", ', ' order by label.enumsortorder)
    from pg_enum as label
    join pg_type as kind on kind.oid = label.enumtypid
    where kind.typname = 'organization_status'),
-  'unclaimed, active, closed, cancelled',
-  'the lifecycle gained no state for a platform closure'
+  'unclaimed, active, suspended, closed, cancelled',
+  'the lifecycle gained a reversible state and still none for a platform closure'
 );
 
 -- ---------------------------------------------------------------------------

@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  NO_PLANS_NOTE,
   fileMessage,
   handsOverHere,
   memberCardHref,
+  paymentMethodLine,
+  planLine,
+  premiumLine,
   responsibleLabel,
   rolesLabel,
   peopleServedSentence,
@@ -39,14 +43,116 @@ function file(overrides: Partial<OrganizationFile> = {}): OrganizationFile {
     sites: [],
     people_served: 0,
     relationship_counts: { active: 0, terminated: 0 },
-    plans_availability: 'not_modelled',
-    payment_method_availability: 'not_modelled',
-    premium_availability: 'not_modelled',
+    plans: [],
+    payment_method: { connected: false, provider: null, connected_at: null },
+    premium: { gives_pro: true, reason: null },
+    guest_quota: {
+      organization_id: '019a8000-0000-7000-8000-000000000301',
+      seats: null,
+      occupied: 0,
+      relationships_active: 0,
+      invitations_pending: 0,
+      places_left: null,
+      over_quota: false,
+      last_change: null,
+    },
+    suspension: {
+      organization_id: '019a8000-0000-7000-8000-000000000301',
+      status: 'active',
+      suspended: false,
+      suspended_at: null,
+      current: null,
+      history: [],
+    },
     ...overrides,
   }
 }
 
 describe('organization file presentation', () => {
+  test('a plan says its price and how many of its clients pay it', () => {
+    const price = new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      currencyDisplay: 'code',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(120000)
+    expect(
+      planLine({
+        plan_id: '019c1000-0000-7000-8000-000000000401',
+        name: 'Mensual',
+        version_id: '019c1000-0000-7000-8000-000000000501',
+        version_number: 1,
+        amount_minor: 12000000,
+        currency_code: 'COP',
+        billing_period: 'month',
+        subscribers: 3,
+      }),
+    ).toBe(`${price} al mes · 3 personas lo pagan`)
+  })
+
+  test('and a plan nobody pays says that, rather than a bare zero', () => {
+    expect(
+      planLine({
+        plan_id: '019c1000-0000-7000-8000-000000000401',
+        name: 'Mensual',
+        version_id: '019c1000-0000-7000-8000-000000000501',
+        version_number: 1,
+        amount_minor: 12000000,
+        currency_code: 'COP',
+        billing_period: 'month',
+        subscribers: 0,
+      }),
+    ).toContain('nadie lo paga todavía')
+  })
+
+  test('a gym with its gateway connected names the provider and no credential', () => {
+    const line = paymentMethodLine(
+      file({
+        payment_method: {
+          connected: true,
+          provider: 'mercado_pago',
+          connected_at: '2026-10-01T12:00:00.000Z',
+        },
+      }),
+    )
+    expect(line).toContain('Mercado Pago')
+    expect(line).toContain('Ninguna credencial')
+  })
+
+  test('and one without it is told it cannot charge anybody yet', () => {
+    expect(
+      paymentMethodLine(
+        file({ payment_method: { connected: false, provider: null, connected_at: null } }),
+      ),
+    ).toContain('no puede cobrarle a nadie')
+  })
+
+  test('Pro comes from operating, not from a switch somebody flips here', () => {
+    expect(premiumLine(file({ premium: { gives_pro: true, reason: null } }))).toContain(
+      'No se activa por gimnasio',
+    )
+  })
+
+  test('a gym that does not operate gives no Pro, and nothing is lost by it', () => {
+    const line = premiumLine(
+      file({ premium: { gives_pro: false, reason: 'organization_not_active' } }),
+    )
+    expect(line).toContain('Mientras no opere')
+    expect(line).toContain('sin perder ningún dato')
+  })
+
+  test('and when no Pro plan is published at all, no gym gives it', () => {
+    expect(
+      premiumLine(file({ premium: { gives_pro: false, reason: 'no_published_pro_version' } })),
+    ).toContain('Ningún plan Pro está publicado')
+  })
+
+  test('a gym with nothing published sells nothing, which is about the gym', () => {
+    expect(NO_PLANS_NOTE).toContain('no tiene ningún plan publicado')
+    expect(NO_PLANS_NOTE).not.toContain('Allfit')
+  })
+
   test('names roles, never people', () => {
     expect(rolesLabel(['owner'])).toBe('Dueño')
     expect(rolesLabel(['admin', 'staff'])).toBe('Administrador · Staff')

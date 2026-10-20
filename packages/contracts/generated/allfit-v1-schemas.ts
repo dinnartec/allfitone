@@ -497,12 +497,48 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'object',
     additionalProperties: false,
     description:
-      'Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero.',
-    required: ['availability'],
+      'What needs attention about the money: the charges a store could not collect inside the window, the Pro renewals in grace, and the subscriptions already suspended. `withheld` is what somebody without `view_billing_metadata` is told, and it is never a zero.\nA gym collects through its own gateway and the worker that records what a provider reports is not built, so a failed charge of a gym is `not_modelled` rather than counted as none.',
+    required: [
+      'availability',
+      'window_hours',
+      'failed_platform_charges',
+      'platform_subscriptions_in_grace',
+      'platform_subscriptions_suspended',
+      'organization_subscriptions_suspended',
+      'failed_organization_charges_availability',
+    ],
     properties: {
       availability: {
         type: 'string',
-        enum: ['not_modelled'],
+        enum: ['available', 'withheld'],
+      },
+      window_hours: {
+        type: 'integer',
+        minimum: 1,
+      },
+      failed_platform_charges: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description: "Charges Allfit's own stores reported as failed inside the window.",
+      },
+      platform_subscriptions_in_grace: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description:
+          'Pro the store could not renew. The person keeps it until the grace period ends, which is why it is worth looking before then.',
+      },
+      platform_subscriptions_suspended: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      organization_subscriptions_suspended: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description: 'Plans a gym paused, usually for not being paid.',
+      },
+      failed_organization_charges_availability: {
+        type: ['string', 'null'],
+        enum: ['not_modelled', null],
       },
     },
   },
@@ -1209,9 +1245,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'sites',
       'people_served',
       'relationship_counts',
-      'plans_availability',
-      'payment_method_availability',
-      'premium_availability',
+      'plans',
+      'payment_method',
+      'premium',
+      'guest_quota',
+      'suspension',
     ],
     properties: {
       organization: {
@@ -1380,14 +1418,25 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           },
         },
       },
-      plans_availability: {
-        $ref: '#/components/schemas/ModelAvailability',
+      plans: {
+        type: 'array',
+        description:
+          'What the gym publishes and how many of its clients pay each one. A draft is not an offer and does not appear; an empty list is a gym that sells nothing, which is a fact about the gym and not about the platform.',
+        items: {
+          $ref: '#/components/schemas/OrganizationFilePlan',
+        },
       },
-      payment_method_availability: {
-        $ref: '#/components/schemas/ModelAvailability',
+      payment_method: {
+        $ref: '#/components/schemas/OrganizationFilePaymentMethod',
       },
-      premium_availability: {
-        $ref: '#/components/schemas/ModelAvailability',
+      premium: {
+        $ref: '#/components/schemas/OrganizationFilePremium',
+      },
+      guest_quota: {
+        $ref: '#/components/schemas/OrganizationGuestQuota',
+      },
+      suspension: {
+        $ref: '#/components/schemas/OrganizationSuspension',
       },
     },
   },
@@ -2137,6 +2186,117 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         },
       },
     },
+  },
+  BreakGlassReview: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What is owed on one break-glass case and what was decided about it. Metadata and the count of exercises only: never a trace of what the window actually read.',
+    required: [
+      'request_id',
+      'case_reference',
+      'purpose',
+      'categories',
+      'sensitivity_tier',
+      'requester_person_id',
+      'subject_person_id',
+      'exercise_count',
+      'first_exercised_at',
+      'review_due_at',
+      'overdue',
+      'reviewed_at',
+      'reviewed_by_person_id',
+      'review_outcome',
+      'reviewed_late',
+    ],
+    properties: {
+      request_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      case_reference: {
+        type: 'string',
+      },
+      purpose: {
+        $ref: '#/components/schemas/BreakGlassPurpose',
+      },
+      categories: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BreakGlassCategory',
+        },
+      },
+      sensitivity_tier: {
+        type: 'string',
+      },
+      requester_person_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      subject_person_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      exercise_count: {
+        type: 'integer',
+        minimum: 0,
+      },
+      first_exercised_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description:
+          'When the obligation started. Null means the window was approved and never used, so nothing is owed.',
+      },
+      review_due_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      overdue: {
+        type: 'boolean',
+        description:
+          'Owed, started and not yet met. A case that was reviewed is never overdue again however late the review was; that is `reviewed_late`.',
+      },
+      reviewed_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      reviewed_by_person_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+      review_outcome: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/BreakGlassReviewOutcome',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      reviewed_late: {
+        type: ['boolean', 'null'],
+        description: 'Null while unreviewed, or while the case was never exercised.',
+      },
+    },
+  },
+  BreakGlassReviewDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['outcome'],
+    description:
+      'A verdict and nothing else. The reviewer does not restate the case: the scope, purpose and subject are already on the file and are immutable.',
+    properties: {
+      outcome: {
+        $ref: '#/components/schemas/BreakGlassReviewOutcome',
+      },
+    },
+  },
+  BreakGlassReviewOutcome: {
+    type: 'string',
+    description:
+      '`incident_opened` is not a worse `unjustified`: it says somebody has to act, and it publishes a different domain event for that reason.',
+    enum: ['justified', 'unjustified', 'incident_opened'],
   },
   BreakGlassStatus: {
     type: 'string',
@@ -4381,6 +4541,59 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Centimetres are canonical. Feet and inches are sent as **total inches**, an integer like any other, and only the label renders them as `5\' 10"` — so no control has to hold two fields that can disagree.',
   },
+  ListedRelationshipSubstitution: {
+    description:
+      'One cover of a relationship, running or finished. A finished one appearing here grants nothing: validity is read from these dates, so this is a fact about the past rather than a key to it.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'membership_id',
+      'professional_person_id',
+      'display_name',
+      'status',
+      'valid_from',
+      'valid_to',
+      'ends_on',
+      'accepted_by_person_at',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      display_name: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+        enum: ['proposed', 'active', 'ended'],
+      },
+      valid_from: {
+        type: 'string',
+        format: 'date-time',
+      },
+      valid_to: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'When the cover stopped, or null while it is still running.',
+      },
+      ends_on: {
+        type: ['string', 'null'],
+        format: 'date',
+      },
+      accepted_by_person_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+        description: 'Null means nobody has answered. Silence is never acceptance.',
+      },
+    },
+  },
   Load: {
     type: 'object',
     additionalProperties: false,
@@ -4500,12 +4713,6 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         enum: ['left', 'right', 'bilateral', 'not_applicable'],
       },
     },
-  },
-  ModelAvailability: {
-    type: 'string',
-    description:
-      '`not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.',
-    enum: ['not_modelled'],
   },
   Movement: {
     type: 'object',
@@ -6188,6 +6395,180 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  OrganizationFilePaymentMethod: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Whether the gym can be paid, and nothing more. The account reference and the vault key live in another table that this reader has no policy for at all, so no credential can travel here even by mistake.',
+    required: ['connected', 'provider', 'connected_at'],
+    properties: {
+      connected: {
+        type: 'boolean',
+      },
+      provider: {
+        type: ['string', 'null'],
+        maxLength: 32,
+      },
+      connected_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  OrganizationFilePlan: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'plan_id',
+      'name',
+      'version_id',
+      'version_number',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'subscribers',
+    ],
+    properties: {
+      plan_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      name: {
+        type: 'string',
+      },
+      version_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 0,
+        description: 'In the minor unit of its currency, by the ISO 4217 exponent.',
+      },
+      currency_code: {
+        type: 'string',
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        type: 'string',
+        enum: ['month', 'year'],
+      },
+      subscribers: {
+        type: 'integer',
+        minimum: 0,
+        description: "How many of the gym's clients are paying this version right now.",
+      },
+    },
+  },
+  OrganizationFilePremium: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Whether the gym gives Pro to the people it serves. By ADR-043 there is no per-gym switch: every gym that operates gives it, as long as a paid Pro version is published at all. The answer is derived, never stored.',
+    required: ['gives_pro', 'reason'],
+    properties: {
+      gives_pro: {
+        type: 'boolean',
+      },
+      reason: {
+        type: ['string', 'null'],
+        enum: ['no_published_pro_version', 'organization_not_active', null],
+      },
+    },
+  },
+  OrganizationGuestQuota: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What the gym was sold and what stands against it. A quota without the occupancy beside it cannot be judged, so both travel together.',
+    required: [
+      'organization_id',
+      'seats',
+      'occupied',
+      'relationships_active',
+      'invitations_pending',
+      'places_left',
+      'over_quota',
+      'last_change',
+    ],
+    properties: {
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      seats: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        description: 'Null is no limit, which is not the same as a limit of zero.',
+      },
+      occupied: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Live relationships plus invitations still awaiting an answer. It is not a count of people: an unanswered invitation names an address, not somebody who can be told apart from whoever may already be there.',
+      },
+      relationships_active: {
+        type: 'integer',
+        minimum: 0,
+      },
+      invitations_pending: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Client invitations with time left to run. One rejected, revoked or out of time has freed its place, and a team invitation never took one.',
+      },
+      places_left: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description:
+          'Null when there is no limit. Zero when the quota is full or already exceeded, because there is no such thing as a negative place.',
+      },
+      over_quota: {
+        type: 'boolean',
+        description:
+          'The gym has more taken than it was sold. It happens when Allfit lowers the number, which never ends a relationship.',
+      },
+      last_change: {
+        type: ['object', 'null'],
+        additionalProperties: false,
+        description:
+          'Null when nobody has ever set a quota here, which is a different answer from somebody having set it to no limit.',
+        required: ['at', 'by_person_id', 'by_duty_assignment_id', 'previous_seats'],
+        properties: {
+          at: {
+            type: 'string',
+            format: 'date-time',
+          },
+          by_person_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          by_duty_assignment_id: {
+            $ref: '#/components/schemas/Uuid',
+          },
+          previous_seats: {
+            type: ['integer', 'null'],
+            minimum: 1,
+            description: 'What it was before. Null means it had no limit then.',
+          },
+        },
+      },
+    },
+  },
+  OrganizationGuestQuotaDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['seats'],
+    properties: {
+      seats: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        maximum: 1000000,
+        description:
+          'How many people the gym may have at once. `null` is no limit: a deal with no cap. Zero is not a quota and is refused — it would be a gym sold the right to invite nobody.',
+      },
+    },
+  },
   OrganizationHandover: {
     type: 'object',
     additionalProperties: false,
@@ -6331,8 +6712,8 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   OrganizationLifecycleStatus: {
     type: 'string',
     description:
-      '`unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.',
-    enum: ['unclaimed', 'active', 'closed', 'cancelled'],
+      '`unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended. `suspended` operates no longer but has ended nothing: it is the only one of these that reverses, and it keeps every permission and relationship.',
+    enum: ['unclaimed', 'active', 'suspended', 'closed', 'cancelled'],
   },
   OrganizationMembershipListItem: {
     type: 'object',
@@ -6725,6 +7106,130 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         $ref: '#/components/schemas/Page',
       },
     },
+  },
+  OrganizationSuspension: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Whether a gym is stopped, why, and what it cost. `history` outlives the state: a gym back on its feet still says it was stopped, which a status column alone cannot do.',
+    required: ['organization_id', 'status', 'suspended', 'suspended_at', 'current', 'history'],
+    properties: {
+      organization_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      status: {
+        $ref: '#/components/schemas/OrganizationLifecycleStatus',
+      },
+      suspended: {
+        type: 'boolean',
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      current: {
+        description: 'The open period, or null when the gym is operating.',
+        oneOf: [
+          {
+            type: 'object',
+            additionalProperties: false,
+            required: [
+              'suspension_id',
+              'reason_code',
+              'started_at',
+              'started_by_person_id',
+              'people_blocked',
+            ],
+            properties: {
+              suspension_id: {
+                type: 'string',
+                format: 'uuid',
+              },
+              reason_code: {
+                $ref: '#/components/schemas/OrganizationSuspensionReason',
+              },
+              started_at: {
+                type: 'string',
+                format: 'date-time',
+              },
+              started_by_person_id: {
+                type: 'string',
+                format: 'uuid',
+              },
+              people_blocked: {
+                type: 'integer',
+                minimum: 0,
+                description:
+                  'Counted from the causes the decision opened, not from the relationships it did not touch.',
+              },
+            },
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      history: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/OrganizationSuspensionPeriod',
+        },
+      },
+    },
+  },
+  OrganizationSuspensionDecision: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['reason_code'],
+    properties: {
+      reason_code: {
+        $ref: '#/components/schemas/OrganizationSuspensionReason',
+      },
+    },
+  },
+  OrganizationSuspensionPeriod: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'suspension_id',
+      'reason_code',
+      'started_at',
+      'started_by_person_id',
+      'ended_at',
+      'ended_by_person_id',
+    ],
+    properties: {
+      suspension_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      reason_code: {
+        $ref: '#/components/schemas/OrganizationSuspensionReason',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      started_by_person_id: {
+        type: 'string',
+        format: 'uuid',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      ended_by_person_id: {
+        type: ['string', 'null'],
+        format: 'uuid',
+      },
+    },
+  },
+  OrganizationSuspensionReason: {
+    type: 'string',
+    description:
+      'A closed list, so the record of why a gym was stopped cannot become free text nobody reads. Non-payment is the case the story names; the rest exist because they would otherwise be recorded as non-payment for lack of anywhere else.',
+    enum: ['nonpayment', 'terms_breach', 'security_incident', 'legal_requirement'],
   },
   OrganizationType: {
     type: 'object',
@@ -8720,6 +9225,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipSubstitutionPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data', 'page'],
+    properties: {
+      data: {
+        type: 'array',
+        maxItems: 100,
+        items: {
+          $ref: '#/components/schemas/ListedRelationshipSubstitution',
+        },
+      },
+      page: {
+        $ref: '#/components/schemas/Page',
+      },
+    },
+  },
   RelationshipSubstitutionProposal: {
     description:
       "The cover as it now stands: pending the person's answer. It grants nothing — `professional_person_id` reads none of this person's data until they accept, and then only until `ends_on`.",
@@ -8776,6 +9298,79 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         format: 'date',
         description: 'Last day of the cover, inclusive. Access stops after it on its own.',
+      },
+    },
+  },
+  RelationshipSubstitutionTermination: {
+    description:
+      "The cover after being cut short. `ended_at` is the instant the access stopped, which is now and not the day it was meant to run until — the professional named here reads nothing of this person's from that moment.",
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'assignment_id',
+      'relationship_id',
+      'membership_id',
+      'professional_person_id',
+      'ended_at',
+    ],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      membership_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      professional_person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  RelationshipTermination: {
+    description:
+      'The relationship after it ended, and what stopped with it. `ended_at` is the single instant the whole thing used: the relationship, every permission frozen and every assignment closed carry that same moment.',
+    type: 'object',
+    additionalProperties: false,
+    required: ['relationship_id', 'person_id', 'ended_at', 'frozen_grants', 'closed_assignments'],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      person_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      frozen_grants: {
+        type: 'integer',
+        description:
+          'Permissions that stopped at that instant. **Frozen is not revoked**: the organization keeps what it was shown up to then and receives nothing after, and reading that history needs its own restricted path.',
+      },
+      closed_assignments: {
+        type: 'integer',
+        description:
+          'The holder and every accepted cover. A cover nobody answered granted nothing and is not counted.',
+      },
+    },
+  },
+  RelationshipTerminationCreate: {
+    description:
+      'A reason is optional: a gym does not owe the system a justification. An empty one is refused rather than stored, because a blank reason reads as a reason that was given.',
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      reason: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 2000,
       },
     },
   },
@@ -13265,7 +13860,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SupportBusinessMetricKey: {
     type: 'string',
     description:
-      '`active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.',
+      '`active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.\n\n`active_subscriptions`, `suspended_subscriptions` and `lapsed_subscriptions` partition the subscriptions that are not ended, and `open_subscriptions` is their total. A lapsed one is a subscription whose period or grace ran out while the store has not yet reported what became of it: only the store moves that status, so it is a standing state rather than a race, and it belongs to neither of the other two.',
     enum: [
       'registered_people',
       'new_people_this_week',
@@ -13275,7 +13870,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'operating_organizations',
       'unclaimed_organizations',
       'active_subscriptions',
-      'billed_this_month',
+      'suspended_subscriptions',
+      'lapsed_subscriptions',
+      'open_subscriptions',
+      'active_organization_subscriptions',
+      'pro_people_paying_allfit',
+      'pro_people_through_organization',
       'premium_people',
     ],
   },
@@ -13300,12 +13900,61 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SupportBusinessMoneyAmount: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['currency_code', 'amount_minor'],
+    properties: {
+      currency_code: {
+        type: 'string',
+        pattern: '^[A-Z]{3}$',
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'In the minor unit of its own currency, by the ISO 4217 exponent. For COP that is hundredths, whatever a display locale would choose to show.',
+      },
+    },
+  },
+  SupportBusinessMoneyMetric: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'One amount, over one period. `amounts` is null unless `availability` is `available`, and it is withheld when fewer people than `minimum_aggregate` paid: with two payers a total is one subtraction away from what each of them pays.',
+    required: ['key', 'availability', 'amounts', 'reason', 'period'],
+    properties: {
+      key: {
+        type: 'string',
+        description:
+          'What Allfit itself billed. A gym charges its own clients through its own gateway and that money never passes through this platform, so it is not here and is not income of Allfit.',
+        enum: ['billed_this_month'],
+      },
+      availability: {
+        $ref: '#/components/schemas/SupportBusinessMetricAvailability',
+      },
+      amounts: {
+        type: ['array', 'null'],
+        description: 'One entry per currency. An empty list is a month with nothing collected.',
+        items: {
+          $ref: '#/components/schemas/SupportBusinessMoneyAmount',
+        },
+      },
+      reason: {
+        type: ['string', 'null'],
+        maxLength: 64,
+      },
+      period: {
+        $ref: '#/components/schemas/SupportBusinessMetricPeriod',
+      },
+    },
+  },
   SupportBusinessPanel: {
     type: 'object',
     additionalProperties: false,
     description:
       'Counts only, each carrying the period it was measured over. No identifier, name or contact travels here, so no figure can be used to reach a person.',
-    required: ['generated_at', 'minimum_aggregate', 'metrics'],
+    required: ['generated_at', 'minimum_aggregate', 'metrics', 'money'],
     properties: {
       generated_at: {
         type: 'string',
@@ -13322,6 +13971,14 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minItems: 1,
         items: {
           $ref: '#/components/schemas/SupportBusinessMetric',
+        },
+      },
+      money: {
+        type: 'array',
+        description:
+          'Amounts, apart from the counts. An amount carries its currency and its minor unit, and amounts in different currencies are never added together.',
+        items: {
+          $ref: '#/components/schemas/SupportBusinessMoneyMetric',
         },
       },
     },
@@ -13489,6 +14146,37 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  SupportPersonCharge: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['occurred_at', 'store', 'result', 'failure_code', 'amount_minor', 'currency_code'],
+    properties: {
+      occurred_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      store: {
+        $ref: '#/components/schemas/SpaceProStore',
+      },
+      result: {
+        type: 'string',
+        enum: ['succeeded', 'failed'],
+      },
+      failure_code: {
+        type: ['string', 'null'],
+        maxLength: 64,
+        description: 'Why the store could not collect. Null when it did.',
+      },
+      amount_minor: {
+        type: ['integer', 'null'],
+        minimum: 0,
+      },
+      currency_code: {
+        type: ['string', 'null'],
+        pattern: '^[A-Z]{3}$',
+      },
+    },
+  },
   SupportPersonMetadata: {
     type: 'object',
     additionalProperties: false,
@@ -13585,6 +14273,216 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       permissions_availability: {
         $ref: '#/components/schemas/SupportBlockAvailability',
+      },
+    },
+  },
+  SupportPersonOrganizationBond: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'subscription_id',
+      'organization_id',
+      'organization_name',
+      'status',
+      'started_at',
+      'suspended_at',
+      'ended_at',
+    ],
+    properties: {
+      subscription_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      organization_name: {
+        type: 'string',
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'suspended', 'ended'],
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SupportPersonPayments: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'What a person pays. Closed by enumeration: no means of payment exists in the schema behind it, so there is nothing to filter out of a row.',
+    required: [
+      'person_id',
+      'generated_at',
+      'pro',
+      'payments',
+      'payments_truncated',
+      'organization_subscriptions',
+      'organization_charges_availability',
+    ],
+    properties: {
+      person_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      generated_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      pro: {
+        $ref: '#/components/schemas/SupportPersonPro',
+      },
+      payments: {
+        type: 'array',
+        maxItems: 100,
+        description: 'Newest first. Both the charges that went through and the ones that did not.',
+        items: {
+          $ref: '#/components/schemas/SupportPersonCharge',
+        },
+      },
+      payments_truncated: {
+        type: 'boolean',
+        description: 'Whether she has more charges than the hundred returned.',
+      },
+      organization_subscriptions: {
+        type: 'array',
+        description:
+          'What she pays her gyms, with the state of each bond and nothing else. The price belongs to the gym and the money never passes through Allfit.',
+        items: {
+          $ref: '#/components/schemas/SupportPersonOrganizationBond',
+        },
+      },
+      organization_charges_availability: {
+        type: 'string',
+        enum: ['not_modelled'],
+        description:
+          'A gym collects through its own gateway and Allfit does not record what the provider reports yet. Stated rather than returned as an empty list, which would read as the gym never having charged her.',
+      },
+    },
+  },
+  SupportPersonPro: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['source', 'subscription', 'organizations'],
+    properties: {
+      source: {
+        type: 'string',
+        enum: ['subscription', 'organization', 'free'],
+        description: 'Which route her Pro comes from, resolved by the same rule the app uses.',
+      },
+      subscription: {
+        oneOf: [
+          {
+            $ref: '#/components/schemas/SupportPersonProSubscription',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      organizations: {
+        type: 'array',
+        description: 'The gyms that give her Pro by her training there.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['organization_id', 'organization_name'],
+          properties: {
+            organization_id: {
+              $ref: '#/components/schemas/Uuid',
+            },
+            organization_name: {
+              type: 'string',
+            },
+          },
+        },
+      },
+    },
+  },
+  SupportPersonProSubscription: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'Her store subscription whatever its state, newest first. A complaint is usually about one that is no longer live, so a suspended or ended one still appears.',
+    required: [
+      'plan_name',
+      'version_number',
+      'amount_minor',
+      'currency_code',
+      'billing_period',
+      'store',
+      'status',
+      'auto_renews',
+      'started_at',
+      'current_period_end',
+      'grace_until',
+      'suspended_at',
+      'ended_at',
+      'ended_reason',
+    ],
+    properties: {
+      plan_name: {
+        type: 'string',
+      },
+      version_number: {
+        type: 'integer',
+        minimum: 1,
+      },
+      amount_minor: {
+        type: 'integer',
+        minimum: 0,
+        description: 'In the minor unit of its currency, by the ISO 4217 exponent.',
+      },
+      currency_code: {
+        type: ['string', 'null'],
+        pattern: '^[A-Z]{3}$',
+      },
+      billing_period: {
+        type: ['string', 'null'],
+        enum: ['month', 'year', null],
+      },
+      store: {
+        $ref: '#/components/schemas/SpaceProStore',
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'grace', 'suspended', 'ended'],
+      },
+      auto_renews: {
+        type: 'boolean',
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      current_period_end: {
+        type: 'string',
+        format: 'date-time',
+      },
+      grace_until: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      suspended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      ended_reason: {
+        type: ['string', 'null'],
+        enum: ['expired', 'refunded', 'revoked', 'replaced', null],
       },
     },
   },

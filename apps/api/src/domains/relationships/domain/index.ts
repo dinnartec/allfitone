@@ -297,6 +297,115 @@ export interface SubstitutionProposalDatabase {
 }
 
 /**
+ * `OP-REL-006`. A cover that has been cut short, and the instant it stopped.
+ *
+ * `endedAt` is an instant and not a day, unlike the window above: the cover was
+ * agreed in days, and this is the moment somebody ended it. Rounding that to a
+ * day would say the access stopped at midnight when it stopped at four.
+ */
+export interface SubstitutionTermination {
+  readonly assignmentId: string
+  readonly relationshipId: string
+  readonly membershipId: string
+  readonly professionalPersonId: string
+  readonly endedAt: string
+}
+
+export type SubstitutionTerminationResult = CommandResult<SubstitutionTermination>
+
+export interface SubstitutionTerminationDatabase {
+  /**
+   * `organizationId` is absent on the Space surface, whose route carries no
+   * organization: the person reaches a relationship of her own directly. The
+   * command resolves it from the relationship either way, so this is the
+   * caller's claim to be acting inside an organization, not the source of
+   * truth about which one the relationship belongs to.
+   */
+  endSubstitution(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId?: string
+      relationshipId: string
+      assignmentId: string
+    },
+  ): Promise<SubstitutionTerminationResult>
+}
+
+/**
+ * `OP-REL-008`. A relationship the organization ended, and what stopped with it.
+ *
+ * `endedAt` is the single instant `T` the whole transaction used: the
+ * relationship, every grant it froze and every assignment it closed carry this
+ * same moment. A historical-access case is measured against it, so three
+ * answers to «when did this stop» would be three different boundaries.
+ *
+ * The counts are what the screen reports back. `frozenGrants` is the one that
+ * matters to a reader: freezing is not revoking, and saying how many permissions
+ * stopped is saying what the organization keeps as history and no longer
+ * receives.
+ */
+export interface RelationshipTermination {
+  readonly relationshipId: string
+  readonly personId: string
+  readonly endedAt: Date
+  readonly frozenGrants: number
+  readonly closedAssignments: number
+}
+
+export type RelationshipTerminationResult = CommandResult<RelationshipTermination>
+
+export interface RelationshipTerminationDatabase {
+  terminate(
+    input: CommandContext & {
+      actorPersonId: string
+      organizationId: string
+      relationshipId: string
+      /** Optional by the catalogue: a gym need not justify itself to the system. */
+      reason?: string
+    },
+  ): Promise<RelationshipTerminationResult>
+}
+
+/**
+ * `OP-REL-013`. The covers of one relationship, running and finished, newest
+ * first.
+ *
+ * Newest first is the point rather than a preference: the relationship card
+ * embeds its covers oldest-first, so the one that is running sinks under every
+ * one that is over — unnoticeable with two and a wall after a few years.
+ *
+ * A finished cover appearing here grants nothing. That is not enforced by this
+ * query: `relationships.actor_is_assigned` already refuses an assignment whose
+ * validity has passed, so reading a fact about the past is reading, not
+ * reopening.
+ */
+export interface ListedSubstitution extends RelationshipSubstitution {
+  /**
+   * Present here and not on the card's own shape: a cover that is over has an
+   * instant it stopped, and a list that spans years is where that matters.
+   */
+  readonly validTo: Date | null
+}
+
+export interface SubstitutionPage {
+  readonly items: readonly ListedSubstitution[]
+  readonly hasMore: boolean
+}
+
+export interface SubstitutionQuery {
+  /** Absent on the Space surface, whose route carries no organization. */
+  readonly organizationId?: string
+  readonly relationshipId: string
+  readonly limit: number
+  readonly cursorValidFrom?: string
+  readonly cursorAssignmentId?: string
+}
+
+export interface SubstitutionListDatabase {
+  listSubstitutions(personId: string, query: SubstitutionQuery): Promise<SubstitutionPage>
+}
+
+/**
  * `OP-REL-012`. A page of the caller's own relationships, shaped as the contract sends
  * it: this answer is handed straight to the client, so the row and the DTO are the same
  * thing and a mapping layer between them would only be a place to drop a field.

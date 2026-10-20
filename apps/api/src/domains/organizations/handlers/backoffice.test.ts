@@ -11,6 +11,8 @@ import { mountSurfaces } from '../../../surfaces.js'
 import type { OrganizationDirectoryService } from '../application/directory.js'
 import type { OrganizationFileService } from '../application/file.js'
 import type { OrganizationHandoverService } from '../application/handover.js'
+import type { OrganizationGuestQuotaService } from '../application/quota.js'
+import type { OrganizationSuspensionService } from '../application/suspension.js'
 import { backofficeOrganizationRoutes } from './backoffice.js'
 
 const ORIGIN = 'https://backoffice.example.test'
@@ -58,6 +60,32 @@ const handoverResource: AllfitV1Schemas['OrganizationHandover'] = {
 let captured: unknown[] = []
 let handoverCalls: Array<{ operation: string; input: unknown }> = []
 let fileCalls: unknown[] = []
+let quotaCalls: Array<{ organizationId: string; decision: unknown }> = []
+
+const quotaResource: AllfitV1Schemas['OrganizationGuestQuota'] = {
+  organization_id: ORGANIZATION_ID,
+  seats: 50,
+  occupied: 3,
+  relationships_active: 2,
+  invitations_pending: 1,
+  places_left: 47,
+  over_quota: false,
+  last_change: {
+    at: '2026-10-15T15:00:00.000Z',
+    by_person_id: ACTOR_PERSON_ID,
+    by_duty_assignment_id: '019ab000-0000-7000-8000-000000000701',
+    previous_seats: null,
+  },
+}
+
+const fileSuspension: AllfitV1Schemas['OrganizationSuspension'] = {
+  organization_id: ORGANIZATION_ID,
+  status: 'active',
+  suspended: false,
+  suspended_at: null,
+  current: null,
+  history: [],
+}
 
 const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   organization: {
@@ -90,9 +118,11 @@ const fileResource: AllfitV1Schemas['BackofficeOrganizationFile'] = {
   sites: [],
   people_served: 0,
   relationship_counts: { active: 0, terminated: 0 },
-  plans_availability: 'not_modelled',
-  payment_method_availability: 'not_modelled',
-  premium_availability: 'not_modelled',
+  plans: [],
+  payment_method: { connected: false, provider: null, connected_at: null },
+  premium: { gives_pro: true, reason: null },
+  guest_quota: quotaResource,
+  suspension: fileSuspension,
 }
 
 function fileService(overrides: Partial<OrganizationFileService> = {}): OrganizationFileService {
@@ -149,6 +179,90 @@ function handoverService(
   }
 }
 
+const suspensionResource: AllfitV1Schemas['OrganizationSuspension'] = {
+  organization_id: ORGANIZATION_ID,
+  status: 'suspended',
+  suspended: true,
+  suspended_at: '2026-10-18T15:00:00.000Z',
+  current: {
+    suspension_id: '019ab000-0000-7000-8000-000000000801',
+    reason_code: 'nonpayment',
+    started_at: '2026-10-18T15:00:00.000Z',
+    started_by_person_id: ACTOR_PERSON_ID,
+    people_blocked: 2,
+  },
+  history: [],
+}
+
+let suspensionCalls: { organizationId: string; reason?: string; action: string }[] = []
+
+function suspensionService(
+  overrides: Partial<OrganizationSuspensionService> = {},
+  replayed = false,
+): OrganizationSuspensionService {
+  return {
+    suspend: (_actor, input) => {
+      suspensionCalls.push({
+        organizationId: input.organizationId,
+        reason: input.decision.reason_code,
+        action: 'suspend',
+      })
+      return Promise.resolve({ resource: suspensionResource, replayed })
+    },
+    reactivate: (_actor, input) => {
+      suspensionCalls.push({ organizationId: input.organizationId, action: 'reactivate' })
+      return Promise.resolve({
+        resource: {
+          ...suspensionResource,
+          status: 'active',
+          suspended: false,
+          suspended_at: null,
+          current: null,
+          history: [
+            {
+              suspension_id: '019ab000-0000-7000-8000-000000000801',
+              reason_code: 'nonpayment',
+              started_at: '2026-10-18T15:00:00.000Z',
+              started_by_person_id: ACTOR_PERSON_ID,
+              ended_at: '2026-10-18T18:00:00.000Z',
+              ended_by_person_id: ACTOR_PERSON_ID,
+            },
+          ],
+        },
+        replayed,
+      })
+    },
+    ...overrides,
+  }
+}
+
+function suspensionRoutes(suspension: OrganizationSuspensionService): Hono {
+  return new Hono().route(
+    '/backoffice/v1',
+    backofficeOrganizationRoutes(
+      directoryService(),
+      sessionService(),
+      handoverService(),
+      fileService(),
+      quotaService(),
+      suspension,
+    ),
+  )
+}
+
+function quotaService(
+  overrides: Partial<OrganizationGuestQuotaService> = {},
+  replayed = false,
+): OrganizationGuestQuotaService {
+  return {
+    set: (_actor, input) => {
+      quotaCalls.push({ organizationId: input.organizationId, decision: input.decision })
+      return Promise.resolve({ resource: quotaResource, replayed })
+    },
+    ...overrides,
+  }
+}
+
 function sessionService(
   overrides: Partial<BackofficeAuthenticationService> = {},
 ): BackofficeAuthenticationService {
@@ -163,10 +277,11 @@ function routes(
   sessions: BackofficeAuthenticationService = sessionService(),
   handover: OrganizationHandoverService = handoverService(),
   file: OrganizationFileService = fileService(),
+  quota: OrganizationGuestQuotaService = quotaService(),
 ): Hono {
   return new Hono().route(
     '/backoffice/v1',
-    backofficeOrganizationRoutes(directory, sessions, handover, file),
+    backofficeOrganizationRoutes(directory, sessions, handover, file, quota),
   )
 }
 
@@ -208,6 +323,14 @@ const validCreate = {
   owner_email: ' Owner@Example.test ',
 }
 
+const quotaPath = `/organizations/${ORGANIZATION_ID}/guest-quota`
+const suspensionPath = `/organizations/${ORGANIZATION_ID}/suspension`
+const reactivationPath = `/organizations/${ORGANIZATION_ID}/reactivation`
+
+function quotaRoutes(quota: OrganizationGuestQuotaService): Hono {
+  return routes(directoryService(), sessionService(), handoverService(), fileService(), quota)
+}
+
 function cursorFor(value: unknown): string {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url')
 }
@@ -220,6 +343,8 @@ beforeEach(() => {
   captured = []
   handoverCalls = []
   fileCalls = []
+  quotaCalls = []
+  suspensionCalls = []
   process.env.BACKOFFICE_WEB_URL = ORIGIN
   process.env.STUDIO_WEB_URL = 'https://studio.example.test'
   process.env.API_PUBLIC_URL = 'https://api.example.test'
@@ -240,7 +365,7 @@ describe('Backoffice organization API contract', () => {
       .map((route) => `${route.method} /backoffice/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(6)
+    expect(contract).toHaveLength(9)
     expect(mounted).toEqual(contract)
   })
 
@@ -259,6 +384,7 @@ describe('Backoffice organization API contract', () => {
         'GET /backoffice/v1/organizations/:organizationId/handover',
         'POST /backoffice/v1/organizations/:organizationId/handover/resends',
         'POST /backoffice/v1/organizations/:organizationId/cancellation',
+        'POST /backoffice/v1/organizations/:organizationId/guest-quota',
       ]),
     )
   })
@@ -493,5 +619,170 @@ describe('Backoffice organization API contract', () => {
     )
 
     expect(answers.map((response) => response.status)).toEqual([403, 404])
+  })
+  test('T-ORG-API-17 sets a quota and passes the number through as it was sent', async () => {
+    const app = routes()
+    const response = await app.request(post(quotaPath, JSON.stringify({ seats: 50 })))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(quotaResource)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(quotaCalls).toEqual([{ organizationId: ORGANIZATION_ID, decision: { seats: 50 } }])
+  })
+
+  test('T-ORG-API-18 carries a deal with no cap as null, and refuses a body that omits it', async () => {
+    const app = routes()
+    const allowed = await app.request(post(quotaPath, JSON.stringify({ seats: null })))
+    expect(allowed.status).toBe(200)
+    expect(quotaCalls.at(-1)?.decision).toEqual({ seats: null })
+
+    // A body with no field at all would otherwise be read as "no limit", which is a
+    // commercial decision nobody made.
+    const omitted = await app.request(post(quotaPath, JSON.stringify({})))
+    expect(omitted.status).toBe(422)
+    expect(quotaCalls).toHaveLength(1)
+  })
+
+  test('T-ORG-API-19 refuses a quota that is not a number of people', async () => {
+    const app = routes()
+    for (const body of [
+      { seats: 0 },
+      { seats: -1 },
+      { seats: 1.5 },
+      { seats: 1000001 },
+      { seats: '50' },
+      { seats: 50, extra: true },
+    ]) {
+      const response = await app.request(post(quotaPath, JSON.stringify(body)))
+      expect(response.status).toBe(422)
+    }
+    expect(quotaCalls).toHaveLength(0)
+  })
+
+  test('T-ORG-API-20 marks a replayed decision instead of deciding twice', async () => {
+    const app = quotaRoutes(quotaService({}, true))
+    const response = await app.request(post(quotaPath, JSON.stringify({ seats: 50 })))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  test('T-ORG-API-21 requires the trusted origin, the command identifiers and a readable gym', async () => {
+    const app = routes()
+    const body = JSON.stringify({ seats: 50 })
+
+    const foreign = await app.request(
+      post(quotaPath, body, { origin: 'https://evil.example.test' }),
+    )
+    expect(foreign.status).toBe(403)
+
+    const unkeyed = await app.request(post(quotaPath, body, { 'idempotency-key': null }))
+    expect(unkeyed.status).toBe(400)
+
+    const malformed = await app.request(post('/organizations/not-a-uuid/guest-quota', body))
+    expect(malformed.status).toBe(400)
+
+    expect(quotaCalls).toHaveLength(0)
+  })
+
+  test('T-ORG-API-22 maps a missing commercial duty and a gym that no longer operates', async () => {
+    const refusal = (code: string) =>
+      quotaRoutes(
+        quotaService({
+          set: () => Promise.reject(Object.assign(new Error('refused'), { code })),
+        }),
+      )
+
+    const body = JSON.stringify({ seats: 50 })
+    expect((await refusal('42501').request(post(quotaPath, body))).status).toBe(403)
+    expect((await refusal('55000').request(post(quotaPath, body))).status).toBe(409)
+    expect((await refusal('P0002').request(post(quotaPath, body))).status).toBe(404)
+  })
+
+  test('T-ORG-API-23 reads the quota back inside the gym file, beside its occupancy', async () => {
+    const app = routes()
+    const response = await app.request(get(`/${ORGANIZATION_ID}`))
+    const file = (await response.json()) as AllfitV1Schemas['BackofficeOrganizationFile']
+
+    expect(file.guest_quota.seats).toBe(50)
+    expect(file.guest_quota.occupied).toBe(3)
+    expect(file.guest_quota.places_left).toBe(47)
+  })
+
+  test('T-ORG-API-24 stops a gym under a reason from the agreed list', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'nonpayment' })),
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as AllfitV1Schemas['OrganizationSuspension']
+    expect(body.suspended).toBe(true)
+    expect(body.current?.people_blocked).toBe(2)
+    expect(suspensionCalls).toEqual([
+      { organizationId: ORGANIZATION_ID, reason: 'nonpayment', action: 'suspend' },
+    ])
+  })
+
+  test('T-ORG-API-25 refuses a reason the platform never agreed to', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'because_i_said_so' })),
+    )
+
+    expect(response.status).toBe(422)
+    expect(suspensionCalls).toHaveLength(0)
+  })
+
+  // The reason is the whole body. A second field would be a decision nobody reviewed.
+  test('T-ORG-API-26 refuses a body carrying anything besides the reason', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'nonpayment', status: 'closed' })),
+    )
+
+    expect(response.status).toBe(422)
+    expect(suspensionCalls).toHaveLength(0)
+  })
+
+  test('T-ORG-API-27 reactivation carries no body and reads the period back closed', async () => {
+    const app = suspensionRoutes(suspensionService())
+    const response = await app.request(post(reactivationPath, ''))
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as AllfitV1Schemas['OrganizationSuspension']
+    expect(body.suspended).toBe(false)
+    expect(body.current).toBeNull()
+    // Criterion 8 outliving the state: the gym operates and still says it was stopped.
+    expect(body.history[0]?.reason_code).toBe('nonpayment')
+    expect(body.history[0]?.ended_by_person_id).toBe(ACTOR_PERSON_ID)
+    expect(suspensionCalls).toEqual([{ organizationId: ORGANIZATION_ID, action: 'reactivate' }])
+  })
+
+  test('T-ORG-API-28 maps the refusals of both commands to their status codes', async () => {
+    const refusal = (code: string) =>
+      suspensionRoutes(
+        suspensionService({
+          suspend: () => Promise.reject(Object.assign(new Error('refused'), { code })),
+          reactivate: () => Promise.reject(Object.assign(new Error('refused'), { code })),
+        }),
+      )
+
+    const body = JSON.stringify({ reason_code: 'nonpayment' })
+    expect((await refusal('42501').request(post(suspensionPath, body))).status).toBe(403)
+    expect((await refusal('55000').request(post(suspensionPath, body))).status).toBe(409)
+    expect((await refusal('P0002').request(post(suspensionPath, body))).status).toBe(404)
+    expect((await refusal('22023').request(post(suspensionPath, body))).status).toBe(422)
+    expect((await refusal('55000').request(post(reactivationPath, ''))).status).toBe(409)
+  })
+
+  test('T-ORG-API-29 a replayed suspension says so in the header', async () => {
+    const app = suspensionRoutes(suspensionService({}, true))
+    const response = await app.request(
+      post(suspensionPath, JSON.stringify({ reason_code: 'nonpayment' })),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
   })
 })

@@ -137,6 +137,31 @@ export function backofficeSupportMetadataRoutes(
     }
   })
 
+  // Its own route and its own duty: `view_billing_metadata` opens this and the
+  // support duty does not, so a card that embedded it would hand one duty what the
+  // other was given. The screen asks for it separately for the same reason.
+  routes.get('/support/people/:personId/payments', async (c) => {
+    const personId = c.req.param('personId')
+    if (!UUID.test(personId)) return problem(c, 'invalid-request')
+    const caseReference = c.req.query('case_reference')
+    if (!caseReference || !SUPPORT_CASE_REFERENCE.test(caseReference)) {
+      return problem(c, 'invalid-request', 'a traceable case reference is required')
+    }
+
+    try {
+      const actor = await backofficeActor(c, sessions())
+      if (actor instanceof Response) return actor
+      return c.json(
+        await metadata().payments(
+          { actorPersonId: actor.personId, actorSessionId: actor.sessionId },
+          { requestId: randomUUID(), caseReference, personId },
+        ),
+      )
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
   // No case reference on the two diagnosis routes, unlike every other support
   // read: this feed has no subject, so there is nothing to trace back to a case.
   routes.get('/support/operations', async (c) => {

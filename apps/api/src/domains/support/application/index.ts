@@ -12,6 +12,9 @@ import type { BackofficeActor } from '../../identity/index.js'
 import type {
   BreakGlassCategory,
   BreakGlassCommandResult,
+  BreakGlassReview,
+  BreakGlassReviewOutcome,
+  BreakGlassReviewResult,
   BreakGlassDatabase,
   BreakGlassExerciseOutcome,
   BreakGlassRequest,
@@ -28,6 +31,7 @@ import type {
   SupportOperationSourceKind,
   SupportOperationState,
   SupportMetadataDatabase,
+  SupportPersonPayments,
   SupportPeopleSearch,
   SupportPersonMetadata,
   SupportLookupKind,
@@ -131,6 +135,15 @@ export interface SupportMetadataService {
     reader: SupportReader,
     input: { requestId: string; caseReference: string; personId: string },
   ): Promise<SupportPersonMetadata>
+  /**
+   * What she pays. Nothing is decided here: the duty, the case reference and what
+   * the projection refuses to carry are all the database's, and a rule restated in
+   * TypeScript would be a second place to get it wrong.
+   */
+  payments(
+    reader: SupportReader,
+    input: { requestId: string; caseReference: string; personId: string },
+  ): Promise<SupportPersonPayments>
 }
 
 export function createSupportMetadataService(
@@ -142,6 +155,7 @@ export function createSupportMetadataService(
       return found ? { outcome: 'found', items: [found] } : { outcome: 'not_found', items: [] }
     },
     read: (reader, input) => database.read({ ...reader, ...input }),
+    payments: (reader, input) => database.payments({ ...reader, ...input }),
   }
 }
 
@@ -248,6 +262,17 @@ export interface BreakGlassService {
     actor: BackofficeActor,
     input: PlatformCommandContext & { breakGlassRequestId: string },
   ): Promise<BreakGlassCommandResult>
+  review(
+    actor: BackofficeActor,
+    input: PlatformCommandContext & {
+      breakGlassRequestId: string
+      outcome: BreakGlassReviewOutcome
+    },
+  ): Promise<BreakGlassReviewResult>
+  reviewQueue(
+    actor: BackofficeActor,
+    input: { requestId: string; limit: number },
+  ): Promise<BreakGlassReview[]>
   list(
     actor: BackofficeActor,
     input: { requestId: string; mine: boolean; status?: BreakGlassStatus; limit: number },
@@ -264,6 +289,8 @@ export function createBreakGlassService(database: BreakGlassDatabase): BreakGlas
     decide: (actor, input) => database.decide({ ...from(actor), ...input }),
     exercise: (actor, input) => database.exercise({ ...from(actor), ...input }),
     close: (actor, input) => database.close({ ...from(actor), ...input }),
+    review: (actor, input) => database.review({ ...from(actor), ...input }),
+    reviewQueue: (actor, input) => database.reviewQueue({ ...from(actor), ...input }),
     list: (actor, input) => database.list({ ...from(actor), ...input }),
   }
 }

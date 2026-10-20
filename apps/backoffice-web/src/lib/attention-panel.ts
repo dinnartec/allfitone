@@ -16,6 +16,7 @@
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
 export type SupportAttentionPanel = AllfitV1Schemas['SupportAttentionPanel']
+export type AttentionBillingNotice = AllfitV1Schemas['AttentionBillingNotice']
 export type AttentionVerificationNotice = AllfitV1Schemas['AttentionVerificationNotice']
 export type AttentionUnclaimedOrganizationNotice =
   AllfitV1Schemas['AttentionUnclaimedOrganizationNotice']
@@ -26,13 +27,42 @@ export const ATTENTION_DESTINATIONS = {
   verifications: '/verifications',
   unclaimedOrganizations: '/organizations?status=unclaimed',
   failures: '/diagnosis',
+  // There is no screen for a person's payments yet (`HU-BO-018`), so this notice
+  // states what is happening and leads nowhere rather than to a page that refuses.
 } as const
 
 export const WITHHELD_NOTE =
   'Tus deberes vigentes no resuelven este aviso, así que no se cuenta para ti. No significa que no haya nada pendiente.'
 
-export const BILLING_NOTE =
-  'Allfit todavía no guarda cobros ni suscripciones. Cuando existan, aquí se verán los cobros fallidos recientes y las suscripciones suspendidas.'
+export const GYM_CHARGES_NOTE =
+  'De los cobros de los gimnasios no sabemos todavía si fallan: cada gimnasio cobra en su propia pasarela y aún no registramos lo que reporta. Una suspensión sí se ve.'
+
+/**
+ * What needs attention about the money, in one sentence. Four numbers, and each one is
+ * a different decision: un cobro fallido se reintenta, una renovación en gracia tiene
+ * fecha límite, y una suscripción suspendida ya le quitó el plan a alguien.
+ */
+export function billingSummary(notice: AttentionBillingNotice): string {
+  if (notice.availability === 'withheld') return WITHHELD_NOTE
+  const failed = notice.failed_platform_charges ?? 0
+  const grace = notice.platform_subscriptions_in_grace ?? 0
+  const suspended =
+    (notice.platform_subscriptions_suspended ?? 0) +
+    (notice.organization_subscriptions_suspended ?? 0)
+  const parts = [
+    failed === 0
+      ? `ningún cobro de Pro falló en las últimas ${notice.window_hours} horas`
+      : counted(failed, 'cobro de Pro falló', 'cobros de Pro fallaron') +
+        ` en las últimas ${notice.window_hours} horas`,
+    grace === 0
+      ? 'ninguna renovación está en periodo de gracia'
+      : counted(grace, 'renovación está en gracia', 'renovaciones están en gracia'),
+    suspended === 0
+      ? 'ninguna suscripción está suspendida'
+      : counted(suspended, 'suscripción está suspendida', 'suscripciones están suspendidas'),
+  ]
+  return `${parts[0]}, ${parts[1]} y ${parts[2]}.`
+}
 
 function counted(count: number, one: string, many: string): string {
   return count === 1 ? `1 ${one}` : `${count} ${many}`
@@ -113,6 +143,7 @@ export function groupLine(group: AttentionFailureGroup): string {
 
 /** Whether a notice asks for somebody to act, which is what earns it a warning tone. */
 export function needsAction(panel: SupportAttentionPanel): {
+  billing: boolean
   verifications: boolean
   unclaimedOrganizations: boolean
   failures: boolean
@@ -121,6 +152,11 @@ export function needsAction(panel: SupportAttentionPanel): {
   const unclaimed = panel.unclaimed_organizations
   const failures = panel.repeated_failures
   return {
+    // A charge that failed and a renewal in grace both have a clock on them. A
+    // suspension does not: it already happened.
+    billing:
+      (panel.billing.failed_platform_charges ?? 0) > 0 ||
+      (panel.billing.platform_subscriptions_in_grace ?? 0) > 0,
     verifications:
       (verifications.pending_count ?? 0) > 0 || (verifications.renewals_due_count ?? 0) > 0,
     unclaimedOrganizations: (unclaimed.needs_follow_up_count ?? 0) > 0,

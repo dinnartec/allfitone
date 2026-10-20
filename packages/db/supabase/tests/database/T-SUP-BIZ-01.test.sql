@@ -3,19 +3,30 @@
 -- **A number without a period is not shown.** Every metric carries the window it was
 -- measured over, because a count means nothing until it says since when.
 --
--- **What cannot be computed is empty, never zero.** Payments have no tables, so those
--- metrics answer `not_modelled` with no value. Zero would be a claim about the
--- business; this is a claim about the platform.
+-- **What cannot be computed is empty, never zero.** The rule has not changed; what it
+-- applies to has. Payments arrived on 2026-10-12, so subscriptions, billing and Pro are
+-- figures now, and the two assertions that proved them `not_modelled` were right about
+-- a schema that no longer exists. Zero would still be a claim about the business, and
+-- `not_modelled` one about the platform: the two must never be confused.
+--
+-- **Money is not a count.** It travels in its own array with its currency, is never
+-- summed across currencies, and is withheld when too few people paid: with two payers a
+-- total is one subtraction away from what each of them pays.
 --
 -- **A count of people hides a small group.** Below the declared minimum the figure is
 -- withheld, so no metric narrows the platform down to somebody. A true zero is still
 -- shown, because it singles out nobody.
 --
+-- **What stopped is a figure too.** A panel that counts only what Allfit collects
+-- describes a business that never loses anybody. The subscriptions that are open are
+-- counted by state, and the states are a partition: what is collected, what the store
+-- suspended and what ran out while the store said nothing add up to the total.
+--
 -- The panel needs `view_platform_metrics`, an `A10` duty: the base role reads nothing.
 
 begin;
 
-select plan(29);
+select plan(46);
 
 create function pg_temp.metric(p_panel jsonb, p_key text) returns integer
 language sql immutable as $fn$
@@ -154,24 +165,24 @@ select is(
 );
 
 -- ---------------------------------------------------------------------------
--- What the platform cannot compute stays empty
+-- Money is not a count, and does not travel with them
 -- ---------------------------------------------------------------------------
 
-select results_eq(
-  $$ select entry->>'key', entry->>'availability', entry->>'value'
-     from biz_before, jsonb_array_elements(panel->'metrics') as entry
-     where entry->>'key' in ('active_subscriptions', 'billed_this_month', 'premium_people')
-     order by 1 $$,
-  $$ values ('active_subscriptions'::text, 'not_modelled'::text, null::text),
-            ('billed_this_month'::text, 'not_modelled'::text, null::text),
-            ('premium_people'::text, 'not_modelled'::text, null::text) $$,
-  'subscriptions, billing and Premium answer not modelled with no figure'
+-- An amount needs its currency, and minor units of a peso overflow the integer a count
+-- fits in. So it has its own array, and a month with nothing collected is an amount of
+-- zero rather than a gap: the condition is known.
+select is(
+  (select jsonb_typeof(panel->'money') from biz_before),
+  'array',
+  'what Allfit billed is published apart from the counts'
 );
 
 select is(
-  (select pg_temp.metric_field(panel, 'active_subscriptions', 'reason') from biz_before),
-  'payments_not_modelled',
-  'and each one says why, so the gap can be argued with'
+  (select entry->'period'->>'kind'
+   from biz_before, jsonb_array_elements(panel->'money') as entry
+   where entry->>'key' = 'billed_this_month'),
+  'month',
+  'and says of which month it is, like every other figure says of its period'
 );
 
 -- ---------------------------------------------------------------------------
@@ -453,6 +464,365 @@ select ok(
   ),
   'the duty check behind it stays private'
 );
+
+-- ---------------------------------------------------------------------------
+-- Pro, what it billed, and what the gyms bill their own clients
+-- ---------------------------------------------------------------------------
+
+-- A plan of Allfit in the state the catalogue leaves it in. Inserted rather than
+-- commanded: `HU-BO-025` owns that command and proves it, and what this panel needs is
+-- the state, not the ceremony.
+insert into payments.platform_plans (
+  id, code, name, plan_kind, status, created_by_person_id, created_by_duty_assignment_id
+)
+select '019b3000-0000-7000-8000-000000001001', 'pro', 'Pro', 'paid', 'published',
+  '019b3000-0000-7000-8000-000000000001', duty.id
+from support.platform_duty_assignments as duty
+where duty.person_id = '019b3000-0000-7000-8000-000000000003'
+  and duty.duty_code = 'view_platform_metrics';
+
+insert into payments.platform_plan_versions (
+  id, platform_plan_id, plan_kind, version_number, amount_minor, currency_code,
+  billing_period, status, proposed_by_person_id, proposed_by_duty_assignment_id,
+  published_by_person_id, published_by_duty_assignment_id, published_at
+)
+select '019b3000-0000-7000-8000-000000001002', '019b3000-0000-7000-8000-000000001001',
+  'paid', 1, 1990000, 'COP', 'month', 'published',
+  '019b3000-0000-7000-8000-000000000001', duty.id,
+  '019b3000-0000-7000-8000-000000000002', duty.id, clock_timestamp()
+from support.platform_duty_assignments as duty
+where duty.person_id = '019b3000-0000-7000-8000-000000000003'
+  and duty.duty_code = 'view_platform_metrics';
+
+insert into payments.platform_store_products (store, product_id, platform_plan_version_id)
+values ('app_store', 'allfit.pro.monthly.biz', '019b3000-0000-7000-8000-000000001002');
+
+-- Six people paying Allfit through a store, which clears the minimum on that route
+-- alone so the figure is a figure and not a withholding.
+insert into identity.people (id, given_name, family_name, status)
+select ('019b3000-0000-7000-8000-00000000101' || step)::uuid, 'Payer', 'Person' || step, 'active'
+from generate_series(1, 6) as step;
+
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, last_observed_at
+)
+select ('019b3000-0000-7000-8000-00000000102' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000101' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-biz-' || step, 'production', 'active', true,
+  clock_timestamp() + interval '20 days', clock_timestamp()
+from generate_series(1, 6) as step;
+
+-- What the stores reported as collected this month, in two currencies, because a store
+-- charges each person in theirs. They are never added together.
+insert into payments.platform_payment_records (
+  platform_subscription_id, person_id, store, store_transaction_id, amount_minor,
+  currency_code, result, occurred_at
+)
+select ('019b3000-0000-7000-8000-00000000102' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000101' || step)::uuid,
+  'app_store', 'txn-biz-' || step,
+  case when step <= 4 then 1990000 else 599 end,
+  case when step <= 4 then 'COP' else 'USD' end,
+  'succeeded', date_trunc('month', clock_timestamp()) + interval '1 hour'
+from generate_series(1, 6) as step;
+
+-- A charge the store could not collect. It is not billing and is not added to it.
+insert into payments.platform_payment_records (
+  platform_subscription_id, person_id, store, store_transaction_id, amount_minor,
+  currency_code, result, failure_code, occurred_at
+)
+values ('019b3000-0000-7000-8000-000000001021', '019b3000-0000-7000-8000-000000001011',
+  'app_store', 'txn-biz-failed', 9900000, 'COP', 'failed', 'billing_retry',
+  clock_timestamp() - interval '2 hours');
+
+-- A gym with six clients, five of whom pay it a plan. Training there is what gives them
+-- Pro; the plan is what they pay the gym. Two different bonds, counted apart.
+insert into organizations.organizations (id, type_code, display_name, responsible_party, status)
+values ('019b3000-0000-7000-8000-000000001031', 'gym', 'Gimnasio Panel',
+  '{"party_kind":"legal_entity","party_name":"Panel SAS","purpose":"studio_operations"}',
+  'active');
+
+insert into identity.people (id, given_name, family_name, status)
+select ('019b3000-0000-7000-8000-00000000104' || step)::uuid, 'Client', 'Person' || step, 'active'
+from generate_series(1, 6) as step;
+
+insert into relationships.service_relationships (id, person_id, organization_id, status)
+select ('019b3000-0000-7000-8000-00000000105' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000104' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001031', 'active'
+from generate_series(1, 6) as step;
+
+insert into payments.organization_plans (id, organization_id, name, status)
+values ('019b3000-0000-7000-8000-000000001061', '019b3000-0000-7000-8000-000000001031',
+  'Mensual', 'published');
+
+insert into payments.plan_versions (
+  id, plan_id, organization_id, version_number, amount_minor, currency_code,
+  billing_period, status, published_at
+)
+values ('019b3000-0000-7000-8000-000000001062', '019b3000-0000-7000-8000-000000001061',
+  '019b3000-0000-7000-8000-000000001031', 1, 12000000, 'COP', 'month', 'published',
+  clock_timestamp());
+
+insert into payments.plan_subscriptions (
+  id, person_id, organization_id, plan_version_id, status, current_period_end
+)
+select ('019b3000-0000-7000-8000-00000000107' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000104' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001031', '019b3000-0000-7000-8000-000000001062',
+  'active', (clock_timestamp() + interval '30 days')::date
+from generate_series(1, 5) as step;
+
+create temporary table biz_money on commit drop as
+select support.read_business_panel(
+  '019b3000-0000-7000-8000-000000000003', '019b3000-0000-7000-8000-000000000023'
+) as panel;
+
+-- `allfit_owner` does not bypass row-level security. Without a policy for this reader
+-- every difference below would be zero and the panel would publish a figure it never
+-- counted, which is worse than the gap it replaced.
+select is(
+  (select pg_temp.metric(a.panel, 'pro_people_paying_allfit')
+        - pg_temp.metric(b.panel, 'pro_people_paying_allfit')
+   from biz_money as a, biz_gyms as b),
+  6,
+  'six people pay Allfit for Pro'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'pro_people_through_organization')
+        - pg_temp.metric(b.panel, 'pro_people_through_organization')
+   from biz_money as a, biz_gyms as b),
+  6,
+  'and six more have it by training at a gym that operates'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'premium_people') - pg_temp.metric(b.panel, 'premium_people')
+   from biz_money as a, biz_gyms as b),
+  12,
+  'twelve people have Pro in all, each counted on one route and never on two'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'active_organization_subscriptions')
+        - pg_temp.metric(b.panel, 'active_organization_subscriptions')
+   from biz_money as a, biz_gyms as b),
+  5,
+  'five of that gym''s clients pay it a plan, which is not income of Allfit'
+);
+
+-- The restatement pinned to its authority. `payments.resolve_pro` decides the route for
+-- one person; the panel restates the same two conditions in set form. If either drifts,
+-- these two stop agreeing.
+select set_config('app.actor_kind', 'person', true);
+
+select is(
+  (select count(*)::integer
+   from generate_series(1, 6) as step
+   where (payments.resolve_pro(
+     ('019b3000-0000-7000-8000-00000000101' || step)::uuid
+   )->>'effective_source') = 'subscription'),
+  6,
+  'and `resolve_pro` says the store subscription is the route for each of those six'
+);
+
+select is(
+  (select count(*)::integer
+   from generate_series(1, 6) as step
+   where (payments.resolve_pro(
+     ('019b3000-0000-7000-8000-00000000104' || step)::uuid
+   )->>'effective_source') = 'organization'),
+  6,
+  'and the gym is the route for the other six, which is how the panel counted them'
+);
+
+select set_config('app.actor_kind', 'support', true);
+
+/*
+ * Criterion 1 of `HU-BO-020`: what Allfit still has open, by state.
+ *
+ * `uidx_platform_subscriptions_live` allows one subscription per person that is not
+ * `ended`, so each person below stands in exactly one state. Five in each, because
+ * under the declared minimum a figure is withheld and a withheld figure is nothing to
+ * compare.
+ */
+insert into identity.people (id, given_name, family_name, status)
+select ('019b3000-0000-7000-8000-00000000110' || step)::uuid, 'Stopped', 'Person' || step,
+  'active'
+from generate_series(1, 5) as step;
+
+-- What the store itself reported as suspended. The billing notice of `HU-BO-005`
+-- counts these same rows, which is why the word may not mean two things.
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, suspended_at, last_observed_at
+)
+select ('019b3000-0000-7000-8000-00000000114' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000110' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-stopped-' || step, 'production', 'suspended', false,
+  clock_timestamp() - interval '10 days', clock_timestamp() - interval '3 days',
+  clock_timestamp()
+from generate_series(1, 5) as step;
+
+insert into identity.people (id, given_name, family_name, status)
+select ('019b3000-0000-7000-8000-00000000111' || step)::uuid, 'Lapsed', 'Person' || step,
+  'active'
+from generate_series(1, 5) as step;
+
+-- Three whose grace ran out and two whose period did, with the store silent. Only the
+-- store moves that status, so they stay here: before this they were in no count at all.
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, grace_until, last_observed_at
+)
+select ('019b3000-0000-7000-8000-00000000115' || step)::uuid,
+  ('019b3000-0000-7000-8000-00000000111' || step)::uuid,
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-lapsed-' || step, 'production',
+  (case when step <= 3 then 'grace' else 'active' end)::payments.platform_subscription_status,
+  true,
+  clock_timestamp() - interval '8 days',
+  case when step <= 3 then clock_timestamp() - interval '1 day' end,
+  clock_timestamp()
+from generate_series(1, 5) as step;
+
+-- A subscription that is closed is not open in any state, so it enters no count.
+insert into identity.people (id, given_name, family_name, status)
+values ('019b3000-0000-7000-8000-000000001121', 'Gone', 'Person', 'active');
+
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, last_observed_at,
+  ended_at, ended_reason
+)
+values ('019b3000-0000-7000-8000-000000001161', '019b3000-0000-7000-8000-000000001121',
+  '019b3000-0000-7000-8000-000000001002', 'app_store', 'allfit.pro.monthly.biz',
+  'ref-gone-1', 'production', 'ended', false, clock_timestamp() - interval '40 days',
+  clock_timestamp(), clock_timestamp() - interval '40 days', 'expired');
+
+create temporary table biz_open on commit drop as
+select support.read_business_panel(
+  '019b3000-0000-7000-8000-000000000003', '019b3000-0000-7000-8000-000000000023'
+) as panel;
+
+select is(
+  (select pg_temp.metric(a.panel, 'suspended_subscriptions')
+        - pg_temp.metric(b.panel, 'suspended_subscriptions')
+   from biz_open as a, biz_money as b),
+  5,
+  'five subscriptions the store reported as suspended'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'lapsed_subscriptions')
+        - pg_temp.metric(b.panel, 'lapsed_subscriptions')
+   from biz_open as a, biz_money as b),
+  5,
+  'and five whose period or grace ran out with the store still silent'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'active_subscriptions')
+        - pg_temp.metric(b.panel, 'active_subscriptions')
+   from biz_open as a, biz_money as b),
+  0,
+  'Allfit collects on none of those ten, so what it does collect did not move'
+);
+
+select is(
+  (select pg_temp.metric(a.panel, 'open_subscriptions')
+        - pg_temp.metric(b.panel, 'open_subscriptions')
+   from biz_open as a, biz_money as b),
+  10,
+  'ten more subscriptions are open, and the one that ended is in none of them'
+);
+
+-- A missing key reads as null, and pgTAP holds null equal to null: without this the
+-- partition below would pass green against a panel that publishes none of the three.
+select isnt(
+  (select pg_temp.metric(panel, 'open_subscriptions') from biz_open),
+  null,
+  'what Allfit has open is a figure the panel actually publishes'
+);
+
+-- The property the panel is read for, asserted on the figures and not on this fixture:
+-- a bucket added later would pass every count above and still leave a reader with a
+-- total that does not add up.
+select is(
+  (select pg_temp.metric(panel, 'active_subscriptions')
+        + pg_temp.metric(panel, 'suspended_subscriptions')
+        + pg_temp.metric(panel, 'lapsed_subscriptions')
+   from biz_open),
+  (select pg_temp.metric(panel, 'open_subscriptions') from biz_open),
+  'and what is open is exactly what Allfit collects, lost, and has not heard about'
+);
+
+
+-- Billing, per currency, with the failed charge in neither.
+select results_eq(
+  $$ select amount->>'currency_code', (amount->>'amount_minor')::bigint
+     from biz_money, jsonb_array_elements(panel->'money') as entry,
+          jsonb_array_elements(entry->'amounts') as amount
+     where entry->>'key' = 'billed_this_month'
+     order by 1 $$,
+  $$ values ('COP'::text, 7960000::bigint), ('USD'::text, 1198::bigint) $$,
+  'what Allfit billed this month is listed per currency and never added across them'
+);
+
+-- The rule itself, on the builder: an amount behind fewer payers than the declared
+-- minimum is withheld, because with two payers a total is one subtraction away from
+-- what each of them pays.
+select is(
+  support.business_money_metric(
+    'billed_this_month', '[{"currency_code":"COP","amount_minor":500}]'::jsonb, 2,
+    'month', clock_timestamp(), clock_timestamp(), 5
+  )->>'availability',
+  'below_threshold',
+  'an amount behind too few payers is withheld, exactly like a count of people'
+);
+
+select is(
+  support.business_money_metric(
+    'billed_this_month', '[{"currency_code":"COP","amount_minor":500}]'::jsonb, 2,
+    'month', clock_timestamp(), clock_timestamp(), 5
+  )->'amounts',
+  'null'::jsonb,
+  'and it is withheld by carrying no amount, never by showing zero'
+);
+
+-- Who may read the rows the gym figures are counted from. The policy is what answers
+-- this, not the function: written `using (true)` the second assertion fails, which is
+-- the only reason it is worth having.
+set local role allfit_owner;
+
+select set_config('app.actor_kind', 'person', true),
+       set_config('app.actor_person_id', '019b3000-0000-7000-8000-000000001041', true),
+       set_config('app.actor_org_id', '', true);
+
+select is(
+  (select count(*)::integer from payments.plan_subscriptions
+    where organization_id = '019b3000-0000-7000-8000-000000001031'),
+  1,
+  'a person reads the subscription that is hers and not the four beside it'
+);
+
+select set_config('app.actor_kind', 'support', true),
+       set_config('app.actor_person_id', '019b3000-0000-7000-8000-000000000004', true);
+
+select is_empty(
+  $$ select 1 from payments.plan_subscriptions
+      where organization_id = '019b3000-0000-7000-8000-000000001031' $$,
+  'and somebody of Allfit holding no duty at all reads none of them'
+);
+
+reset role;
+
+select set_config('app.actor_kind', 'support', true),
+       set_config('app.actor_person_id', '019b3000-0000-7000-8000-000000000003', true);
 
 select * from finish();
 rollback;

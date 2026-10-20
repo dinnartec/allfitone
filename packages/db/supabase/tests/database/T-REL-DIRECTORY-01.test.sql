@@ -16,7 +16,8 @@ values
   ('019ad000-0000-7000-8000-000000000003', 'Carla', 'Castro', 'active'),
   ('019ad000-0000-7000-8000-000000000011', 'Olivia', 'Owner', 'active'),
   ('019ad000-0000-7000-8000-000000000012', 'Camilo', 'Coach', 'active'),
-  ('019ad000-0000-7000-8000-000000000013', 'Sara', 'Staff', 'active');
+  ('019ad000-0000-7000-8000-000000000013', 'Sara', 'Staff', 'active'),
+  ('019ad000-0000-7000-8000-000000000015', 'Diana', 'Coach', 'active');
 
 insert into organizations.organizations (id, type_code, display_name, responsible_party)
 values (
@@ -31,13 +32,16 @@ values
   ('019ad000-0000-7000-8000-000000000202', '019ad000-0000-7000-8000-000000000101',
     '019ad000-0000-7000-8000-000000000012', 'active'),
   ('019ad000-0000-7000-8000-000000000203', '019ad000-0000-7000-8000-000000000101',
-    '019ad000-0000-7000-8000-000000000013', 'active');
+    '019ad000-0000-7000-8000-000000000013', 'active'),
+  ('019ad000-0000-7000-8000-000000000205', '019ad000-0000-7000-8000-000000000101',
+    '019ad000-0000-7000-8000-000000000015', 'active');
 
 insert into organizations.membership_roles (membership_id, role_code)
 values
   ('019ad000-0000-7000-8000-000000000201', 'owner'),
   ('019ad000-0000-7000-8000-000000000202', 'coach'),
-  ('019ad000-0000-7000-8000-000000000203', 'staff');
+  ('019ad000-0000-7000-8000-000000000203', 'staff'),
+  ('019ad000-0000-7000-8000-000000000205', 'coach');
 
 insert into relationships.service_relationships (id, person_id, organization_id, status)
 values
@@ -48,19 +52,28 @@ values
   ('019ad000-0000-7000-8000-000000000303', '019ad000-0000-7000-8000-000000000003',
     '019ad000-0000-7000-8000-000000000101', 'terminated');
 
--- The coach holds Ana as titular and stands in for Bruno as a substitute the
+-- Camilo holds Ana as titular and stands in for Diana on Bruno, a cover the
 -- person accepted. Carla is nobody's.
+--
+-- Diana exists because a cover stands in for somebody: a substitution on a
+-- relationship with no holder is a state `OP-REL-004` refuses to create, so a
+-- fixture with one was describing something the product cannot produce.
 insert into relationships.relationship_professional_assignments (
   id, relationship_id, person_id, organization_id, membership_id,
-  kind, status, valid_from, ends_on, accepted_by_person_at
+  covers_membership_id, kind, status, valid_from, ends_on, accepted_by_person_at
 ) values
   ('019ad000-0000-7000-8000-000000000401', '019ad000-0000-7000-8000-000000000301',
     '019ad000-0000-7000-8000-000000000001', '019ad000-0000-7000-8000-000000000101',
-    '019ad000-0000-7000-8000-000000000202', 'holder', 'active',
+    '019ad000-0000-7000-8000-000000000202', null, 'holder', 'active',
     clock_timestamp() - interval '30 days', null, null),
+  ('019ad000-0000-7000-8000-000000000403', '019ad000-0000-7000-8000-000000000302',
+    '019ad000-0000-7000-8000-000000000002', '019ad000-0000-7000-8000-000000000101',
+    '019ad000-0000-7000-8000-000000000205', null, 'holder', 'active',
+    clock_timestamp() - interval '40 days', null, null),
   ('019ad000-0000-7000-8000-000000000402', '019ad000-0000-7000-8000-000000000302',
     '019ad000-0000-7000-8000-000000000002', '019ad000-0000-7000-8000-000000000101',
-    '019ad000-0000-7000-8000-000000000202', 'substitute', 'active',
+    '019ad000-0000-7000-8000-000000000202',
+    '019ad000-0000-7000-8000-000000000205', 'substitute', 'active',
     clock_timestamp() - interval '10 days',
     (clock_timestamp() + interval '30 days')::date, clock_timestamp() - interval '10 days');
 

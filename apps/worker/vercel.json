@@ -3,8 +3,13 @@
   "framework": "hono",
   "functions": {
     "src/index.ts": {
-      "includeFiles": "../../packages/{auth-provider,notifications,queue,telemetry}/**"
+      "includeFiles": "../../packages/{auth-provider,db,notifications,queue,telemetry}/**"
     }
   },
-  "crons": [{ "path": "/cron/outbox", "schedule": "* * * * *" }]
+  "crons": [
+    {
+      "path": "/cron/outbox",
+      "schedule": "* * * * *"
+    }
+  ]
 }

@@ -371,6 +371,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/backoffice/v1/support/people/{personId}/payments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Open what a person pays
+     * @description Her plan of Allfit, what it charges and through which store, every charge with its result and the reason when it failed, and whether it is suspended and since when. If her Pro comes from a gym, the gym is named.
+     *     No means of payment appears, because Allfit stores none. What she pays a gym is shown with its state only: the gym collects through its own gateway and those charges are not recorded here, so they are `not_modelled` rather than an empty list.
+     *     Requires `view_billing_metadata` — the duty that opens a person's card does not open her money — and a traceable case reference. Payments are not a break-glass category. The read is recorded against the person before its content is returned.
+     */
+    get: operations['readBackofficeSupportPersonPayments']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/backoffice/v1/support/operations': {
     parameters: {
       query?: never
@@ -514,6 +536,70 @@ export interface paths {
      * @description A live invitation is sent again as it is, so the first email keeps working. A spent or lapsed one is replaced by a new invitation to the same address. It is never sent to a different one, and an organization with an owner has nothing to resend: 409. The command carries no body.
      */
     post: operations['resendBackofficeOrganizationHandover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/guest-quota': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Set how many people a gym may have
+     * @description `HU-BO-034`. The number Allfit sold the gym: how many people may have a live relationship or an invitation still awaiting an answer at the same time. It is `manage_platform_commercial`, which is not the duty that creates a gym. A `null` is a deal with no cap, and it is told apart from a gym nobody has sold a number to only by its history. Lowering it below the occupancy ends no relationship and revokes no invitation: the gym is over its quota and says so, and `HU-STUDIO-087` is what refuses the next invitation. A gym that no longer operates is not sold a quota: 409.
+     */
+    post: operations['setBackofficeOrganizationGuestQuota']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/suspension': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop a gym without destroying anything
+     * @description `HU-BO-016`. The gym stops operating: it cannot invite, assign, publish or charge, and its clients drop to the free plan while it lasts. Nothing is destroyed — no permission is revoked, no relationship ends, no session is cancelled — because each affected person gets a reversible cause instead.
+     *
+     *     Only a gym that is operating is suspended: one nobody claimed is not operating and one that is cancelled or closed is terminal, so both answer 409. Suspending a suspended gym converges and does not open a second period.
+     */
+    post: operations['suspendBackofficeOrganization']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/organizations/{organizationId}/reactivation': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Let a suspended gym operate again
+     * @description `HU-BO-016` criteria 6 and 7. Subtractive: it closes only the causes this suspension opened and recomputes from whatever is true now. It restores no earlier copy of permissions, relationships, memberships, assignments, subscriptions or sessions, and nothing revoked, ended, changed, cancelled, started or expired during the suspension comes back. Any other open cause — an unpaid subscription, say — keeps denying.
+     *
+     *     The command carries no body. Reactivating a gym that is operating converges; one that was never suspended answers 409.
+     */
+    post: operations['reactivateBackofficeOrganization']
     delete?: never
     options?: never
     head?: never
@@ -730,6 +816,52 @@ export interface paths {
      * @description Only the requester closes their own. There is no reopening and no extension: continuing means asking again. Closing a closed window converges rather than failing.
      */
     post: operations['closeBackofficeBreakGlass']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/reviews': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the cases that still owe a review
+     * @description What is still owed, most overdue first. A case enters this queue the moment it is first exercised and leaves it when it is reviewed, so a window somebody opened and never used never appears.
+     *
+     *     The queue is not filtered by who may review each case: a reviewer who turns out not to be independent is refused by the command, and hiding the row would hide an obligation that is still outstanding.
+     */
+    get: operations['listBackofficeBreakGlassReviewQueue']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/backoffice/v1/break-glass/requests/{requestId}/review': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Review a break-glass case that was used
+     * @description The only control on break-glass that fires after the reading. Asks for `audit_break_glass`, and for independence: the reviewer is neither the requester, nor the subject, nor anybody who approved the case.
+     *
+     *     A case is reviewable once it was exercised, not once it was approved. A verdict is terminal: the same command replays, a different one conflicts.
+     *
+     *     The twenty-four hours are an obligation and not a filter. A late review is accepted and recorded as late, because refusing it would leave the case unreviewed for good and make "100% of exercised cases are reviewed" unreachable by construction.
+     */
+    post: operations['reviewBackofficeBreakGlass']
     delete?: never
     options?: never
     head?: never
@@ -2193,7 +2325,7 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions': {
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/termination': {
     parameters: {
       query?: never
       header?: never
@@ -2201,6 +2333,40 @@ export interface paths {
       cookie?: never
     }
     get?: never
+    put?: never
+    /**
+     * End a client's relationship with the gym
+     * @description Ends the relationship **at once**, with no notice period, and stops every permission it carried at the same instant.
+     *
+     *     **Freezing is not revoking.** The organization keeps the history it was shown up to that moment and receives nothing created after it. That history is not readable through ordinary screens: it needs a historical-access case, an eligible actor, MFA and a stated purpose.
+     *
+     *     The professional in charge and every accepted cover are closed at the same instant, so nobody keeps reading through an assignment. The person is told, inside the command's own transaction — a termination that cannot be announced does not happen.
+     *
+     *     A `coach` may not call this, even for a client they attend. A reason is optional.
+     */
+    post: operations['terminateRelationship']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Who has covered this client, and when
+     * @description Running covers and finished ones together, **newest first** — the relationship's own document lists them oldest-first, so the cover that is running sinks under every cover that is over once a client has a few years of history.
+     *
+     *     A finished cover appearing here **grants nothing**. Whether a professional may read anything is decided from these same dates, so listing one is reading a fact about the past, not reopening it.
+     *
+     *     Which covers come back is the row policy's decision: a coach sees their own and the covers of clients they hold, an administrator sees them all.
+     */
+    get: operations['listRelationshipSubstitutions']
     put?: never
     /**
      * Ask a client to accept somebody covering for their coach
@@ -2215,6 +2381,86 @@ export interface paths {
      *     Asking twice for the same professional over the same days answers `409`.
      */
     post: operations['proposeRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/substitutions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Who has been authorised over my data, and when
+     * @description Who has covered this client, and when. Running covers and finished ones together, **newest first** — the relationship's own document lists them oldest-first, so the cover that is running sinks under every cover that is over once a client has a few years of history.
+     *
+     *     A finished cover appearing here **grants nothing**. Whether a professional may read anything is decided from these same dates, so listing one is reading a fact about the past, not reopening it.
+     *
+     *     This is the person's own route, and the only way she has of seeing it: the relationship document is a Studio operation. It includes covers still waiting on her answer, because being asked is itself something she is entitled to see.
+     */
+    get: operations['listMyRelationshipSubstitutions']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions/{substitutionId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * End a cover before its last day
+     * @description Ends a cover before the day it was meant to run until. The substitute stops reading this person's data **at once** — not at midnight, not when a nightly process notices.
+     *
+     *     It touches nothing else. The coach in charge stays in charge, the relationship is unaffected, and whatever the substitute recorded while covering stays recorded under their name: this closes an authorisation, it does not retract work.
+     *
+     *     Only a cover that is actually running can be ended. One the person has not answered grants no access, so there is nothing to cut, and it answers `409`.
+     *
+     *     Ending a cover that is already over is not an error: the caller asked for it to be over and it is.
+     *
+     *     Unlike proposing one, the coach in charge may **not** call this: it is for an administrator or an owner. The person being covered has their own route for it in Space.
+     */
+    post: operations['endRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Stop somebody covering for your coach
+     * @description Ends a cover before the day it was meant to run until. The substitute stops reading this person's data **at once** — not at midnight, not when a nightly process notices.
+     *
+     *     It touches nothing else. The coach in charge stays in charge, the relationship is unaffected, and whatever the substitute recorded while covering stays recorded under their name: this closes an authorisation, it does not retract work.
+     *
+     *     Only a cover that is actually running can be ended. One the person has not answered grants no access, so there is nothing to cut, and it answers `409`.
+     *
+     *     Ending a cover that is already over is not an error: the caller asked for it to be over and it is.
+     *
+     *     This is the person's own route: no organization in the path, because she reaches a relationship of hers directly. She needs nobody's agreement to close it — the cover reads her data, and it is hers to stop.
+     */
+    post: operations['endMyRelationshipSubstitution']
     delete?: never
     options?: never
     head?: never
@@ -4128,10 +4374,10 @@ export interface components {
     /** @enum {string} */
     BreakGlassStatus: 'requested' | 'approved' | 'rejected' | 'closed' | 'expired'
     /**
-     * @description `unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended.
+     * @description `unclaimed` exists but does not operate: Allfit created it and its owner has not accepted yet. `cancelled` was never claimed. `closed` operated and ended. `suspended` operates no longer but has ended nothing: it is the only one of these that reverses, and it keeps every permission and relationship.
      * @enum {string}
      */
-    OrganizationLifecycleStatus: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    OrganizationLifecycleStatus: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
     /** @description An organization as the directory shows it. Nothing here identifies a person: no legal name and no responsible party. */
     BackofficeOrganizationSummary: {
       organization_id: components['schemas']['Uuid']
@@ -4154,11 +4400,6 @@ export interface components {
       data: components['schemas']['BackofficeOrganizationSummary'][]
       page: components['schemas']['Page']
     }
-    /**
-     * @description `not_modelled` means the platform has no table for this yet. It is a fact about Allfit, never about the organization or the person.
-     * @enum {string}
-     */
-    ModelAvailability: 'not_modelled'
     BackofficeOrganizationFile: {
       organization: {
         organization_id: components['schemas']['Uuid']
@@ -4211,9 +4452,110 @@ export interface components {
         active: number
         terminated: number
       }
-      plans_availability: components['schemas']['ModelAvailability']
-      payment_method_availability: components['schemas']['ModelAvailability']
-      premium_availability: components['schemas']['ModelAvailability']
+      /** @description What the gym publishes and how many of its clients pay each one. A draft is not an offer and does not appear; an empty list is a gym that sells nothing, which is a fact about the gym and not about the platform. */
+      plans: components['schemas']['OrganizationFilePlan'][]
+      payment_method: components['schemas']['OrganizationFilePaymentMethod']
+      premium: components['schemas']['OrganizationFilePremium']
+      guest_quota: components['schemas']['OrganizationGuestQuota']
+      suspension: components['schemas']['OrganizationSuspension']
+    }
+    OrganizationFilePlan: {
+      plan_id: components['schemas']['Uuid']
+      name: string
+      version_id: components['schemas']['Uuid']
+      version_number: number
+      /** @description In the minor unit of its currency, by the ISO 4217 exponent. */
+      amount_minor: number
+      currency_code: string
+      /** @enum {string} */
+      billing_period: 'month' | 'year'
+      /** @description How many of the gym's clients are paying this version right now. */
+      subscribers: number
+    }
+    OrganizationGuestQuotaDecision: {
+      /** @description How many people the gym may have at once. `null` is no limit: a deal with no cap. Zero is not a quota and is refused — it would be a gym sold the right to invite nobody. */
+      seats: number | null
+    }
+    /**
+     * @description A closed list, so the record of why a gym was stopped cannot become free text nobody reads. Non-payment is the case the story names; the rest exist because they would otherwise be recorded as non-payment for lack of anywhere else.
+     * @enum {string}
+     */
+    OrganizationSuspensionReason:
+      'nonpayment' | 'terms_breach' | 'security_incident' | 'legal_requirement'
+    OrganizationSuspensionDecision: {
+      reason_code: components['schemas']['OrganizationSuspensionReason']
+    }
+    OrganizationSuspensionPeriod: {
+      /** Format: uuid */
+      suspension_id: string
+      reason_code: components['schemas']['OrganizationSuspensionReason']
+      /** Format: date-time */
+      started_at: string
+      /** Format: uuid */
+      started_by_person_id: string
+      /** Format: date-time */
+      ended_at: string | null
+      /** Format: uuid */
+      ended_by_person_id: string | null
+    }
+    /** @description Whether a gym is stopped, why, and what it cost. `history` outlives the state: a gym back on its feet still says it was stopped, which a status column alone cannot do. */
+    OrganizationSuspension: {
+      /** Format: uuid */
+      organization_id: string
+      status: components['schemas']['OrganizationLifecycleStatus']
+      suspended: boolean
+      /** Format: date-time */
+      suspended_at: string | null
+      /** @description The open period, or null when the gym is operating. */
+      current: {
+        /** Format: uuid */
+        suspension_id: string
+        reason_code: components['schemas']['OrganizationSuspensionReason']
+        /** Format: date-time */
+        started_at: string
+        /** Format: uuid */
+        started_by_person_id: string
+        /** @description Counted from the causes the decision opened, not from the relationships it did not touch. */
+        people_blocked: number
+      } | null
+      history: components['schemas']['OrganizationSuspensionPeriod'][]
+    }
+    /** @description What the gym was sold and what stands against it. A quota without the occupancy beside it cannot be judged, so both travel together. */
+    OrganizationGuestQuota: {
+      organization_id: components['schemas']['Uuid']
+      /** @description Null is no limit, which is not the same as a limit of zero. */
+      seats: number | null
+      /** @description Live relationships plus invitations still awaiting an answer. It is not a count of people: an unanswered invitation names an address, not somebody who can be told apart from whoever may already be there. */
+      occupied: number
+      relationships_active: number
+      /** @description Client invitations with time left to run. One rejected, revoked or out of time has freed its place, and a team invitation never took one. */
+      invitations_pending: number
+      /** @description Null when there is no limit. Zero when the quota is full or already exceeded, because there is no such thing as a negative place. */
+      places_left: number | null
+      /** @description The gym has more taken than it was sold. It happens when Allfit lowers the number, which never ends a relationship. */
+      over_quota: boolean
+      /** @description Null when nobody has ever set a quota here, which is a different answer from somebody having set it to no limit. */
+      last_change: {
+        /** Format: date-time */
+        at: string
+        by_person_id: components['schemas']['Uuid']
+        by_duty_assignment_id: components['schemas']['Uuid']
+        /** @description What it was before. Null means it had no limit then. */
+        previous_seats: number | null
+      } | null
+    }
+    /** @description Whether the gym can be paid, and nothing more. The account reference and the vault key live in another table that this reader has no policy for at all, so no credential can travel here even by mistake. */
+    OrganizationFilePaymentMethod: {
+      connected: boolean
+      provider: string | null
+      /** Format: date-time */
+      connected_at: string | null
+    }
+    /** @description Whether the gym gives Pro to the people it serves. By ADR-043 there is no per-gym switch: every gym that operates gives it, as long as a paid Pro version is published at all. The answer is derived, never stored. */
+    OrganizationFilePremium: {
+      gives_pro: boolean
+      /** @enum {string|null} */
+      reason: 'no_published_pro_version' | 'organization_not_active' | null
     }
     /**
      * @description Whether the organization answers as a company or as a natural person. A natural person's name is never written by Allfit.
@@ -4399,6 +4741,45 @@ export interface components {
       /** Format: date-time */
       decided_at: string
     }
+    /** @description A verdict and nothing else. The reviewer does not restate the case: the scope, purpose and subject are already on the file and are immutable. */
+    BreakGlassReviewDecision: {
+      outcome: components['schemas']['BreakGlassReviewOutcome']
+    }
+    /**
+     * @description `incident_opened` is not a worse `unjustified`: it says somebody has to act, and it publishes a different domain event for that reason.
+     * @enum {string}
+     */
+    BreakGlassReviewOutcome: 'justified' | 'unjustified' | 'incident_opened'
+    /** @description What is owed on one break-glass case and what was decided about it. Metadata and the count of exercises only: never a trace of what the window actually read. */
+    BreakGlassReview: {
+      /** Format: uuid */
+      request_id: string
+      case_reference: string
+      purpose: components['schemas']['BreakGlassPurpose']
+      categories: components['schemas']['BreakGlassCategory'][]
+      sensitivity_tier: string
+      /** Format: uuid */
+      requester_person_id: string
+      /** Format: uuid */
+      subject_person_id: string
+      exercise_count: number
+      /**
+       * Format: date-time
+       * @description When the obligation started. Null means the window was approved and never used, so nothing is owed.
+       */
+      first_exercised_at: string | null
+      /** Format: date-time */
+      review_due_at: string | null
+      /** @description Owed, started and not yet met. A case that was reviewed is never overdue again however late the review was; that is `reviewed_late`. */
+      overdue: boolean
+      /** Format: date-time */
+      reviewed_at: string | null
+      /** Format: uuid */
+      reviewed_by_person_id: string | null
+      review_outcome: components['schemas']['BreakGlassReviewOutcome'] | null
+      /** @description Null while unreviewed, or while the case was never exercised. */
+      reviewed_late: boolean | null
+    }
     /** @description The file. It carries metadata about purpose and subject, and never the person's content. */
     BreakGlassRequest: {
       id: components['schemas']['UuidV7']
@@ -4514,10 +4895,23 @@ export interface components {
     SupportDeliveryCircuitList: {
       items: components['schemas']['SupportDeliveryCircuit'][]
     }
-    /** @description Failed charges and suspended subscriptions. Payments have no tables yet, so this says so instead of printing a zero. */
+    /**
+     * @description What needs attention about the money: the charges a store could not collect inside the window, the Pro renewals in grace, and the subscriptions already suspended. `withheld` is what somebody without `view_billing_metadata` is told, and it is never a zero.
+     *     A gym collects through its own gateway and the worker that records what a provider reports is not built, so a failed charge of a gym is `not_modelled` rather than counted as none.
+     */
     AttentionBillingNotice: {
       /** @enum {string} */
-      availability: 'not_modelled'
+      availability: 'available' | 'withheld'
+      window_hours: number
+      /** @description Charges Allfit's own stores reported as failed inside the window. */
+      failed_platform_charges: number | null
+      /** @description Pro the store could not renew. The person keeps it until the grace period ends, which is why it is worth looking before then. */
+      platform_subscriptions_in_grace: number | null
+      platform_subscriptions_suspended: number | null
+      /** @description Plans a gym paused, usually for not being paid. */
+      organization_subscriptions_suspended: number | null
+      /** @enum {string|null} */
+      failed_organization_charges_availability: 'not_modelled' | null
     }
     /** @description `withheld` when the operator does not hold `verify_professional_credentials`; every count is then null, never zero. */
     AttentionVerificationNotice: {
@@ -4573,6 +4967,87 @@ export interface components {
       credential_verifications: components['schemas']['AttentionVerificationNotice']
       unclaimed_organizations: components['schemas']['AttentionUnclaimedOrganizationNotice']
       repeated_failures: components['schemas']['AttentionFailureNotice']
+    }
+    /** @description What a person pays. Closed by enumeration: no means of payment exists in the schema behind it, so there is nothing to filter out of a row. */
+    SupportPersonPayments: {
+      person_id: components['schemas']['Uuid']
+      /** Format: date-time */
+      generated_at: string
+      pro: components['schemas']['SupportPersonPro']
+      /** @description Newest first. Both the charges that went through and the ones that did not. */
+      payments: components['schemas']['SupportPersonCharge'][]
+      /** @description Whether she has more charges than the hundred returned. */
+      payments_truncated: boolean
+      /** @description What she pays her gyms, with the state of each bond and nothing else. The price belongs to the gym and the money never passes through Allfit. */
+      organization_subscriptions: components['schemas']['SupportPersonOrganizationBond'][]
+      /**
+       * @description A gym collects through its own gateway and Allfit does not record what the provider reports yet. Stated rather than returned as an empty list, which would read as the gym never having charged her.
+       * @enum {string}
+       */
+      organization_charges_availability: 'not_modelled'
+    }
+    SupportPersonPro: {
+      /**
+       * @description Which route her Pro comes from, resolved by the same rule the app uses.
+       * @enum {string}
+       */
+      source: 'subscription' | 'organization' | 'free'
+      subscription: components['schemas']['SupportPersonProSubscription'] | null
+      /** @description The gyms that give her Pro by her training there. */
+      organizations: {
+        organization_id: components['schemas']['Uuid']
+        organization_name: string
+      }[]
+    }
+    /** @description Her store subscription whatever its state, newest first. A complaint is usually about one that is no longer live, so a suspended or ended one still appears. */
+    SupportPersonProSubscription: {
+      plan_name: string
+      version_number: number
+      /** @description In the minor unit of its currency, by the ISO 4217 exponent. */
+      amount_minor: number
+      currency_code: string | null
+      /** @enum {string|null} */
+      billing_period: 'month' | 'year' | null
+      store: components['schemas']['SpaceProStore']
+      /** @enum {string} */
+      status: 'active' | 'grace' | 'suspended' | 'ended'
+      auto_renews: boolean
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      current_period_end: string
+      /** Format: date-time */
+      grace_until: string | null
+      /** Format: date-time */
+      suspended_at: string | null
+      /** Format: date-time */
+      ended_at: string | null
+      /** @enum {string|null} */
+      ended_reason: 'expired' | 'refunded' | 'revoked' | 'replaced' | null
+    }
+    SupportPersonCharge: {
+      /** Format: date-time */
+      occurred_at: string
+      store: components['schemas']['SpaceProStore']
+      /** @enum {string} */
+      result: 'succeeded' | 'failed'
+      /** @description Why the store could not collect. Null when it did. */
+      failure_code: string | null
+      amount_minor: number | null
+      currency_code: string | null
+    }
+    SupportPersonOrganizationBond: {
+      subscription_id: components['schemas']['Uuid']
+      organization_id: components['schemas']['Uuid']
+      organization_name: string
+      /** @enum {string} */
+      status: 'active' | 'suspended' | 'ended'
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      suspended_at: string | null
+      /** Format: date-time */
+      ended_at: string | null
     }
     /**
      * @description Whether a block of the projection can say anything. `unknown` is a statement about the person; `not_modelled` is a statement about the platform, and confusing the two makes the card lie by omission.
@@ -6259,6 +6734,30 @@ export interface components {
       starts_on: string
       /** Format: date */
       ends_on: string
+    }
+    /** @description A reason is optional: a gym does not owe the system a justification. An empty one is refused rather than stored, because a blank reason reads as a reason that was given. */
+    RelationshipTerminationCreate: {
+      reason?: string
+    }
+    /** @description The relationship after it ended, and what stopped with it. `ended_at` is the single instant the whole thing used: the relationship, every permission frozen and every assignment closed carry that same moment. */
+    RelationshipTermination: {
+      relationship_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      /** Format: date-time */
+      ended_at: string
+      /** @description Permissions that stopped at that instant. **Frozen is not revoked**: the organization keeps what it was shown up to then and receives nothing after, and reading that history needs its own restricted path. */
+      frozen_grants: number
+      /** @description The holder and every accepted cover. A cover nobody answered granted nothing and is not counted. */
+      closed_assignments: number
+    }
+    /** @description The cover after being cut short. `ended_at` is the instant the access stopped, which is now and not the day it was meant to run until — the professional named here reads nothing of this person's from that moment. */
+    RelationshipSubstitutionTermination: {
+      assignment_id: components['schemas']['UuidV7']
+      relationship_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      /** Format: date-time */
+      ended_at: string
     }
     /** @description One moment in a relationship's past. `detail` carries different keys per `type`, and every one of them is metadata about the moment — never the content a permission covers. */
     RelationshipHistoryEvent: {
@@ -8551,6 +9050,8 @@ export interface components {
       /** @description The smallest group of people the panel will report. A count of people below it is withheld; a true zero is still published. */
       minimum_aggregate: number
       metrics: components['schemas']['SupportBusinessMetric'][]
+      /** @description Amounts, apart from the counts. An amount carries its currency and its minor unit, and amounts in different currencies are never added together. */
+      money: components['schemas']['SupportBusinessMoneyMetric'][]
     }
     /** @description One figure. `value` is null unless `availability` is `available`, and the period is never absent: a number without a period is not published. */
     SupportBusinessMetric: {
@@ -8563,6 +9064,8 @@ export interface components {
     }
     /**
      * @description `active_people_this_week` counts people training in Space and has no signal at all; `studio_active_professionals_this_week` counts professionals working in Studio, which is the only activity the platform records. They are not the same question and must not be read as one.
+     *
+     *     `active_subscriptions`, `suspended_subscriptions` and `lapsed_subscriptions` partition the subscriptions that are not ended, and `open_subscriptions` is their total. A lapsed one is a subscription whose period or grace ran out while the store has not yet reported what became of it: only the store moves that status, so it is a standing state rather than a race, and it belongs to neither of the other two.
      * @enum {string}
      */
     SupportBusinessMetricKey:
@@ -8574,8 +9077,31 @@ export interface components {
       | 'operating_organizations'
       | 'unclaimed_organizations'
       | 'active_subscriptions'
-      | 'billed_this_month'
+      | 'suspended_subscriptions'
+      | 'lapsed_subscriptions'
+      | 'open_subscriptions'
+      | 'active_organization_subscriptions'
+      | 'pro_people_paying_allfit'
+      | 'pro_people_through_organization'
       | 'premium_people'
+    /** @description One amount, over one period. `amounts` is null unless `availability` is `available`, and it is withheld when fewer people than `minimum_aggregate` paid: with two payers a total is one subtraction away from what each of them pays. */
+    SupportBusinessMoneyMetric: {
+      /**
+       * @description What Allfit itself billed. A gym charges its own clients through its own gateway and that money never passes through this platform, so it is not here and is not income of Allfit.
+       * @enum {string}
+       */
+      key: 'billed_this_month'
+      availability: components['schemas']['SupportBusinessMetricAvailability']
+      /** @description One entry per currency. An empty list is a month with nothing collected. */
+      amounts: components['schemas']['SupportBusinessMoneyAmount'][] | null
+      reason: string | null
+      period: components['schemas']['SupportBusinessMetricPeriod']
+    }
+    SupportBusinessMoneyAmount: {
+      currency_code: string
+      /** @description In the minor unit of its own currency, by the ISO 4217 exponent. For COP that is hundredths, whatever a display locale would choose to show. */
+      amount_minor: number
+    }
     /**
      * @description `below_threshold` is a statement about the group being too small to report; `not_modelled` is a statement about the platform. Neither is zero.
      * @enum {string}
@@ -8846,6 +9372,33 @@ export interface components {
       /** Format: date-time */
       ended_at: string | null
       previous_relationship_id: components['schemas']['UuidV7'] | null
+    }
+    /** @description One cover of a relationship, running or finished. A finished one appearing here grants nothing: validity is read from these dates, so this is a fact about the past rather than a key to it. */
+    ListedRelationshipSubstitution: {
+      assignment_id: components['schemas']['UuidV7']
+      membership_id: components['schemas']['UuidV7']
+      professional_person_id: components['schemas']['UuidV7']
+      display_name: string
+      /** @enum {string} */
+      status: 'proposed' | 'active' | 'ended'
+      /** Format: date-time */
+      valid_from: string
+      /**
+       * Format: date-time
+       * @description When the cover stopped, or null while it is still running.
+       */
+      valid_to: string | null
+      /** Format: date */
+      ends_on: string | null
+      /**
+       * Format: date-time
+       * @description Null means nobody has answered. Silence is never acceptance.
+       */
+      accepted_by_person_at: string | null
+    }
+    RelationshipSubstitutionPage: {
+      data: components['schemas']['ListedRelationshipSubstitution'][]
+      page: components['schemas']['Page']
     }
     SpaceRelationshipPage: {
       data: components['schemas']['SpaceRelationship'][]
@@ -9215,6 +9768,7 @@ export interface components {
     TemplateId: components['schemas']['Uuid']
     VersionNumber: number
     RelationshipId: components['schemas']['Uuid']
+    SubstitutionId: components['schemas']['Uuid']
     PlannedSessionId: components['schemas']['Uuid']
     ExecutionId: components['schemas']['Uuid']
     PersonId: components['schemas']['Uuid']
@@ -10003,6 +10557,40 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  readBackofficeSupportPersonPayments: {
+    parameters: {
+      query: {
+        /** @description The case this read belongs to. A structured reference rather than free prose, so the record can be followed back to a case months later. */
+        case_reference: components['parameters']['SupportCaseReference']
+      }
+      header: {
+        Origin: components['parameters']['Origin']
+      }
+      path: {
+        personId: components['parameters']['SupportPersonId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description What the person pays, as of now */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SupportPersonPayments']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   listBackofficeSupportOperations: {
     parameters: {
       query?: {
@@ -10248,6 +10836,128 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['OrganizationHandover']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  setBackofficeOrganizationGuestQuota: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationGuestQuotaDecision']
+      }
+    }
+    responses: {
+      /** @description The quota as it now stands, with what is against it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationGuestQuota']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  suspendBackofficeOrganization: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OrganizationSuspensionDecision']
+      }
+    }
+    responses: {
+      /** @description The stopped gym */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSuspension']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      415: components['responses']['UnsupportedMediaType']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reactivateBackofficeOrganization: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The gym operating again */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OrganizationSuspension']
         }
       }
       400: components['responses']['BadRequest']
@@ -10722,6 +11432,76 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listBackofficeBreakGlassReviewQueue: {
+    parameters: {
+      query?: {
+        limit?: components['parameters']['Limit']
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Cases awaiting review */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            items: components['schemas']['BreakGlassReview'][]
+          }
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  reviewBackofficeBreakGlass: {
+    parameters: {
+      query?: never
+      header: {
+        Origin: components['parameters']['Origin']
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        requestId: components['parameters']['BreakGlassRequestId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BreakGlassReviewDecision']
+      }
+    }
+    responses: {
+      /** @description The reviewed case */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BreakGlassReview']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
       503: components['responses']['UpstreamUnavailable']
     }
   }
@@ -13380,6 +14160,80 @@ export interface operations {
       503: components['responses']['UpstreamUnavailable']
     }
   }
+  terminateRelationship: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['RelationshipTerminationCreate']
+      }
+    }
+    responses: {
+      /** @description The relationship is over, and every permission it carried is frozen */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listRelationshipSubstitutions: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The covers of this relationship, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
   proposeRelationshipSubstitution: {
     parameters: {
       query?: never
@@ -13428,6 +14282,111 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyRelationshipSubstitutions: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The covers of this relationship, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  endRelationshipSubstitution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+        relationshipId: components['parameters']['RelationshipId']
+        substitutionId: components['parameters']['SubstitutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The cover is over, and the substitute's access with it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  endMyRelationshipSubstitution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+        substitutionId: components['parameters']['SubstitutionId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The cover is over, and the substitute's access with it */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
     }
   }

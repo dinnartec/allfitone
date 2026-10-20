@@ -83,6 +83,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '415', '422', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/break-glass/requests/{requestId}/review',
+      operationId: 'reviewBackofficeBreakGlass',
+      allfitOperation: 'OP-SUP-006',
+      responses: ['200', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/break-glass/reviews',
+      operationId: 'listBackofficeBreakGlassReviewQueue',
+      allfitOperation: 'OP-SUP-006',
+      responses: ['200', '400', '401', '403', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/catalogue',
       operationId: 'readBackofficeGlobalCatalogue',
@@ -195,6 +209,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '409', '415', '422', '429', '503'],
     },
     {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/guest-quota',
+      operationId: 'setBackofficeOrganizationGuestQuota',
+      allfitOperation: 'OP-ORG-023',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
       method: 'GET',
       path: '/backoffice/v1/organizations/{organizationId}/handover',
       operationId: 'readBackofficeOrganizationHandover',
@@ -206,6 +227,20 @@ export const allfitV1ContractManifest = {
       path: '/backoffice/v1/organizations/{organizationId}/handover/resends',
       operationId: 'resendBackofficeOrganizationHandover',
       allfitOperation: 'OP-ORG-021',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/reactivation',
+      operationId: 'reactivateBackofficeOrganization',
+      allfitOperation: 'OP-ORG-025',
+      responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/backoffice/v1/organizations/{organizationId}/suspension',
+      operationId: 'suspendBackofficeOrganization',
+      allfitOperation: 'OP-ORG-024',
       responses: ['200', '400', '401', '403', '404', '409', '415', '422', '503'],
     },
     {
@@ -409,6 +444,13 @@ export const allfitV1ContractManifest = {
       path: '/backoffice/v1/support/people/{personId}',
       operationId: 'readBackofficeSupportPersonMetadata',
       allfitOperation: 'OP-SUP-005',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/backoffice/v1/support/people/{personId}/payments',
+      operationId: 'readBackofficeSupportPersonPayments',
+      allfitOperation: 'NEW-SUP-PERSON-PAYMENTS',
       responses: ['200', '400', '401', '403', '404', '422', '503'],
     },
     {
@@ -1014,6 +1056,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '422', '503'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/relationships/{relationshipId}/substitutions',
+      operationId: 'listMyRelationshipSubstitutions',
+      allfitOperation: 'OP-REL-013',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination',
+      operationId: 'endMyRelationshipSubstitution',
+      allfitOperation: 'OP-REL-006',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/session-templates',
       operationId: 'createMySessionTemplate',
@@ -1399,11 +1455,32 @@ export const allfitV1ContractManifest = {
       responses: ['200', '201', '400', '401', '403', '404', '409', '422', '503'],
     },
     {
+      method: 'GET',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions',
+      operationId: 'listRelationshipSubstitutions',
+      allfitOperation: 'OP-REL-013',
+      responses: ['200', '400', '401', '403', '404', '422', '503'],
+    },
+    {
       method: 'POST',
       path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions',
       operationId: 'proposeRelationshipSubstitution',
       allfitOperation: 'OP-REL-004',
       responses: ['200', '201', '400', '401', '403', '404', '409', '422', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/substitutions/{substitutionId}/termination',
+      operationId: 'endRelationshipSubstitution',
+      allfitOperation: 'OP-REL-006',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/studio/v1/organizations/{organizationId}/relationships/{relationshipId}/termination',
+      operationId: 'terminateRelationship',
+      allfitOperation: 'OP-REL-008',
+      responses: ['200', '400', '401', '403', '404', '409', '422', '503'],
     },
     {
       method: 'GET',

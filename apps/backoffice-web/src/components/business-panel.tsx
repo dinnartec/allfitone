@@ -43,6 +43,8 @@ import {
   metricLabel,
   metricNote,
   metricValue,
+  moneyLines,
+  moneyNote,
   periodPhrase,
 } from '@/lib/business-panel'
 import { formatInstant } from '@/lib/platform-access'
@@ -110,6 +112,55 @@ export function BusinessPanel() {
           </CardDescription>
         </CardHeader>
       </Card>
+
+      {/* Money first inside its own section: an amount is what the founder opens this
+          screen for, and it is the one figure that is not a count of anything. */}
+      {panel.money.length > 0 ? (
+        <section data-business-section="billed">
+          <h3 data-business-section-title>Facturado por Allfit</h3>
+          <p data-business-section-description>
+            Lo que las tiendas cobraron por Pro. Un gimnasio cobra en su propia pasarela, así que lo
+            que sus clientes le pagan no aparece aquí y no es ingreso de Allfit.
+          </p>
+          <div data-business-metrics>
+            {panel.money.map((metric) => {
+              const lines = moneyLines(metric)
+              const note = moneyNote(metric, panel.minimum_aggregate)
+              return (
+                <Card
+                  key={metric.key}
+                  data-business-money={metric.key}
+                  data-availability={metric.availability}
+                >
+                  <CardHeader>
+                    <CardTitle role="heading" aria-level={4}>
+                      {metricLabel(metric.key)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div data-business-body>
+                      {lines.length > 0 ? (
+                        lines.map((line) => (
+                          <p key={line} data-business-value>
+                            {line}
+                          </p>
+                        ))
+                      ) : (
+                        <p data-business-value>—</p>
+                      )}
+                      <p data-business-period>{periodPhrase(metric.period)}</p>
+                      {note ? <p data-business-note>{note}</p> : null}
+                      {metricHint(metric.key) ? (
+                        <p data-business-hint>{metricHint(metric.key)}</p>
+                      ) : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {businessSections(panel).map((section) => (
         <section key={section.key} data-business-section={section.key}>

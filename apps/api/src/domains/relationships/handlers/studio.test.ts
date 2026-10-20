@@ -9,6 +9,9 @@ import type {
   RelationshipHistoryService,
   RelationshipStateService,
   SubstitutionProposalService,
+  SubstitutionTerminationService,
+  SubstitutionListService,
+  RelationshipTerminationService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -1041,5 +1044,387 @@ describe('asking a client to accept a cover', () => {
   test('the response is never stored', async () => {
     const response = await coverApp().fetch(propose(COVER_BODY))
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+const SUBSTITUTION = '019ad000-0000-7000-8000-000000000403'
+const END_PATH =
+  `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}` +
+  `/substitutions/${SUBSTITUTION}/termination`
+
+function terminations(
+  overrides: Partial<SubstitutionTerminationService> = {},
+  capture?: (input: Record<string, unknown>) => void,
+): SubstitutionTerminationService {
+  const answer = async (input: Record<string, unknown>) => {
+    capture?.(input)
+    return {
+      resource: {
+        assignmentId: SUBSTITUTION,
+        relationshipId: RELATIONSHIP,
+        membershipId: MEMBERSHIP,
+        professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+        endedAt: '2026-11-04T15:20:00.000Z',
+      },
+      replayed: false,
+    }
+  }
+  return {
+    end: async (_actor, input) => answer(input as unknown as Record<string, unknown>),
+    endMine: async (_personId, input) => answer(input as unknown as Record<string, unknown>),
+    ...overrides,
+  }
+}
+
+function endApp(service: SubstitutionTerminationService = terminations()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), terminations: service }),
+  )
+  return routes
+}
+
+function endCover(path: string = END_PATH, headers: Record<string, string> = ASSIGN_HEADERS) {
+  return new Request(`https://api.example.test${path}`, { method: 'POST', headers })
+}
+
+describe('ending a cover before its last day', () => {
+  test('answers with the cover and the instant the access stopped', async () => {
+    const response = await endApp().fetch(endCover())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.assignment_id).toBe(SUBSTITUTION)
+    expect(payload.ended_at).toBe('2026-11-04T15:20:00.000Z')
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = terminations({
+      end: async () => ({
+        resource: {
+          assignmentId: SUBSTITUTION,
+          relationshipId: RELATIONSHIP,
+          membershipId: MEMBERSHIP,
+          professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+          endedAt: '2026-11-04T15:20:00.000Z',
+        },
+        replayed: true,
+      }),
+    })
+    const response = await endApp(replayed).fetch(endCover())
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  /*
+   * The command carries no body, so what makes it idempotent is hashed from
+   * what the path names. Hashing an empty object instead would make one key
+   * replay the first cover's answer for a second, different one — and the
+   * caller would be told an access was cut that is still running.
+   */
+  test('two different covers under one key are two different commands', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = endApp(terminations({}, (input) => seen.push(input)))
+    await app.fetch(endCover())
+    const other = '019ad000-0000-7000-8000-000000000404'
+    await app.fetch(
+      endCover(
+        `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}` +
+          `/substitutions/${other}/termination`,
+      ),
+    )
+    expect(seen[0]?.requestHash).not.toEqual(seen[1]?.requestHash)
+  })
+
+  // A cover nobody answered grants nothing, so there is no access to cut. The
+  // command refuses it and that has to read as a conflict, not an outage.
+  test('a cover that is not running is a conflict', async () => {
+    const refused = terminations({
+      end: async () => {
+        throw Object.assign(new Error('not running'), { code: 'P0004' })
+      },
+    })
+    const response = await endApp(refused).fetch(endCover())
+    expect(response.status).toBe(409)
+  })
+
+  // The coach in charge may propose a cover and may not end one. The command
+  // decides it; this proves the refusal reaches the caller as a refusal.
+  test('a caller the command refuses gets a refusal, not an outage', async () => {
+    const refused = terminations({
+      end: async () => {
+        throw Object.assign(new Error('not allowed'), { code: '42501' })
+      },
+    })
+    const response = await endApp(refused).fetch(endCover())
+    expect(response.status).toBe(403)
+  })
+
+  test('a substitution id that is not an id', async () => {
+    const response = await endApp().fetch(
+      endCover(
+        `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}` +
+          `/substitutions/not-an-id/termination`,
+      ),
+    )
+    expect(response.status).toBe(400)
+  })
+
+  test('without command headers it is not a command', async () => {
+    const { 'idempotency-key': _key, ...headers } = ASSIGN_HEADERS
+    const response = await endApp().fetch(endCover(END_PATH, headers))
+    expect(response.status).toBe(400)
+  })
+
+  test('is never stored by a cache', async () => {
+    const response = await endApp().fetch(endCover())
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+})
+
+const LIST_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/substitutions`
+
+function listedCover(overrides: Record<string, unknown> = {}) {
+  return {
+    assignmentId: '019ad000-0000-7000-8000-000000000403',
+    membershipId: MEMBERSHIP,
+    professionalPersonId: '019ad000-0000-7000-8000-000000000014',
+    displayName: 'Daniela Hoyos',
+    status: 'active' as const,
+    validFrom: new Date('2026-11-02T00:00:00.000Z'),
+    validTo: null,
+    endsOn: '2026-11-09',
+    acceptedByPersonAt: new Date('2026-11-01T12:00:00.000Z'),
+    ...overrides,
+  }
+}
+
+function substitutionPages(
+  page: { items: ReturnType<typeof listedCover>[]; hasMore: boolean } = {
+    items: [listedCover()],
+    hasMore: false,
+  },
+  capture?: (query: Record<string, unknown>) => void,
+): SubstitutionListService {
+  return {
+    list: async (_actor, query) => {
+      capture?.(query as unknown as Record<string, unknown>)
+      return page
+    },
+    listMine: async () => page,
+  }
+}
+
+function listApp(service: SubstitutionListService = substitutionPages()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), substitutionPages: service }),
+  )
+  return routes
+}
+
+function askList(query = '', headers: Record<string, string> = HEADERS): Request {
+  return new Request(`https://api.example.test${LIST_PATH}${query}`, { headers })
+}
+
+describe('who has covered this client', () => {
+  test('answers the covers with their dates', async () => {
+    const response = await listApp().fetch(askList())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as {
+      data: Record<string, unknown>[]
+      page: Record<string, unknown>
+    }
+    expect(payload.data[0]?.display_name).toBe('Daniela Hoyos')
+    expect(payload.data[0]?.valid_from).toBe('2026-11-02T00:00:00.000Z')
+    expect(payload.page.has_more).toBe(false)
+    expect(payload.page.next_cursor).toBeNull()
+  })
+
+  /*
+   * A cover that is over carries the instant it stopped, and the card's own
+   * shape has no room for it. A list spanning years is where that matters.
+   */
+  test('a finished cover carries when it stopped', async () => {
+    const finished = listedCover({
+      status: 'ended',
+      validTo: new Date('2026-11-05T15:20:00.000Z'),
+    })
+    const response = await listApp(substitutionPages({ items: [finished], hasMore: false })).fetch(
+      askList(),
+    )
+    const payload = (await response.json()) as { data: Record<string, unknown>[] }
+    expect(payload.data[0]?.status).toBe('ended')
+    expect(payload.data[0]?.valid_to).toBe('2026-11-05T15:20:00.000Z')
+  })
+
+  test('a running cover has no stopping instant', async () => {
+    const response = await listApp().fetch(askList())
+    const payload = (await response.json()) as { data: Record<string, unknown>[] }
+    expect(payload.data[0]?.valid_to).toBeNull()
+  })
+
+  // The cursor round-trips: what the page hands out is what the next request
+  // can be read back from. A cursor nobody can parse is a list that repeats.
+  test('the cursor it hands out is one it can read back', async () => {
+    const first = await listApp(substitutionPages({ items: [listedCover()], hasMore: true })).fetch(
+      askList(),
+    )
+    const { page } = (await first.json()) as { page: { next_cursor: string } }
+    expect(page.next_cursor).toBeTruthy()
+
+    const seen: Record<string, unknown>[] = []
+    const app = listApp(substitutionPages(undefined, (query) => seen.push(query)))
+    const second = await app.fetch(askList(`?cursor=${page.next_cursor}`))
+    expect(second.status).toBe(200)
+    expect(seen[0]?.cursorValidFrom).toBe('2026-11-02T00:00:00.000Z')
+    expect(seen[0]?.cursorAssignmentId).toBe('019ad000-0000-7000-8000-000000000403')
+  })
+
+  test('a cursor nobody could have issued is refused', async () => {
+    const response = await listApp().fetch(askList('?cursor=not-a-cursor'))
+    expect(response.status).toBe(422)
+  })
+
+  test('a limit that is not a page size is refused', async () => {
+    expect((await listApp().fetch(askList('?limit=0'))).status).toBe(422)
+    expect((await listApp().fetch(askList('?limit=500'))).status).toBe(422)
+  })
+
+  // Read for deciding who has seen somebody's data, so a stale copy is worse
+  // than a slow one.
+  test('is never stored by a cache', async () => {
+    const response = await listApp().fetch(askList())
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+})
+
+const TERMINATE_PATH = `/studio/v1/organizations/${ORGANIZATION}/relationships/${RELATIONSHIP}/termination`
+
+function relationshipEndings(
+  overrides: Partial<RelationshipTerminationService> = {},
+  capture?: (input: Record<string, unknown>) => void,
+): RelationshipTerminationService {
+  return {
+    terminate: async (_actor, input) => {
+      capture?.(input as unknown as Record<string, unknown>)
+      return {
+        resource: {
+          relationshipId: RELATIONSHIP,
+          personId: '019ad000-0000-7000-8000-000000000001',
+          endedAt: new Date('2026-11-04T15:20:00.000Z'),
+          frozenGrants: 3,
+          closedAssignments: 2,
+        },
+        replayed: false,
+      }
+    },
+    ...overrides,
+  }
+}
+
+function endRelationshipApp(service: RelationshipTerminationService = relationshipEndings()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/studio/v1',
+    studioRelationshipRoutes({ sessions: sessions(), relationshipTerminations: service }),
+  )
+  return routes
+}
+
+function terminate(body?: unknown, headers: Record<string, string> = ASSIGN_HEADERS): Request {
+  return new Request(`https://api.example.test${TERMINATE_PATH}`, {
+    method: 'POST',
+    headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
+}
+
+describe('ending a client relationship', () => {
+  /*
+   * The counts are the answer, not decoration. «Three permissions frozen» is
+   * what tells a reader the organization keeps that history and receives
+   * nothing after — and freezing is not revoking.
+   */
+  test('answers with the instant and what stopped with it', async () => {
+    const response = await endRelationshipApp().fetch(terminate())
+    expect(response.status).toBe(200)
+    const payload = (await response.json()) as Record<string, unknown>
+    expect(payload.ended_at).toBe('2026-11-04T15:20:00.000Z')
+    expect(payload.frozen_grants).toBe(3)
+    expect(payload.closed_assignments).toBe(2)
+  })
+
+  // A gym does not owe the system a justification, so no body is a valid body.
+  test('a request with no body at all is valid', async () => {
+    const response = await endRelationshipApp().fetch(terminate())
+    expect(response.status).toBe(200)
+  })
+
+  test('a reason goes down as the caller wrote it', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = endRelationshipApp(relationshipEndings({}, (input) => seen.push(input)))
+    await app.fetch(terminate({ reason: 'Se mudó de ciudad' }))
+    expect(seen[0]?.reason).toBe('Se mudó de ciudad')
+  })
+
+  /*
+   * A blank reason is refused rather than trimmed away. A caller who sends one
+   * believes they gave a reason, and storing nothing would quietly disagree.
+   */
+  test('a blank reason is refused, not trimmed away', async () => {
+    const response = await endRelationshipApp().fetch(terminate({ reason: '   ' }))
+    expect(response.status).toBe(422)
+  })
+
+  test('a body carrying a field the contract does not declare', async () => {
+    const response = await endRelationshipApp().fetch(terminate({ reason: 'ok', notify: false }))
+    expect(response.status).toBe(422)
+  })
+
+  /*
+   * The catalogue is explicit that a coach may not do this, even for a client
+   * they attend. The command decides it; this proves the refusal arrives as a
+   * refusal rather than as an outage.
+   */
+  test('a coach is refused, and told so', async () => {
+    const refused = relationshipEndings({
+      terminate: async () => {
+        throw Object.assign(new Error('not allowed'), { code: '42501' })
+      },
+    })
+    const response = await endRelationshipApp(refused).fetch(terminate())
+    expect(response.status).toBe(403)
+  })
+
+  // Two different relationships under one key must not replay each other.
+  test('the relationship is part of what makes the command idempotent', async () => {
+    const seen: Record<string, unknown>[] = []
+    const app = endRelationshipApp(relationshipEndings({}, (input) => seen.push(input)))
+    await app.fetch(terminate())
+    await app.fetch(terminate({ reason: 'otra cosa' }))
+    expect(seen[0]?.requestHash).not.toEqual(seen[1]?.requestHash)
+  })
+
+  test('marks a replayed command', async () => {
+    const replayed = relationshipEndings({
+      terminate: async () => ({
+        resource: {
+          relationshipId: RELATIONSHIP,
+          personId: '019ad000-0000-7000-8000-000000000001',
+          endedAt: new Date('2026-11-04T15:20:00.000Z'),
+          frozenGrants: 0,
+          closedAssignments: 0,
+        },
+        replayed: true,
+      }),
+    })
+    const response = await endRelationshipApp(replayed).fetch(terminate())
+    expect(response.headers.get('Idempotent-Replay')).toBe('true')
+  })
+
+  test('is never stored by a cache', async () => {
+    const response = await endRelationshipApp().fetch(terminate())
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })

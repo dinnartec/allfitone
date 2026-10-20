@@ -27,6 +27,25 @@ export interface StudioApiFixture {
   relationshipHistory: unknown[]
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
   reassignmentOutcome: 'reassigned' | 'no-holder' | 'forbidden'
+  /**
+   * `proposed` adds the pending cover to the fixture, the way the command does.
+   * `already-proposed` is the `409` a partial unique index raises when the same
+   * professional is already waiting on an answer for the same days — a double
+   * click lands there, which is why the screen offers no retry.
+   */
+  substitutionOutcome: 'proposed' | 'already-proposed' | 'forbidden'
+  /**
+   * `ended` closes the cover in the fixture, the way the command does — the
+   * screen refetches rather than trusting the answer, so the list has to agree.
+   * `already-ended` is the `409` for a cover that is no longer running.
+   */
+  substitutionEndOutcome: 'ended' | 'already-ended' | 'forbidden'
+  /**
+   * `terminated` closes the relationship in the fixture, the way the command
+   * does: the screen refetches rather than trusting the answer, so the page has
+   * to agree with it.
+   */
+  terminationOutcome: 'terminated' | 'already-ended' | 'forbidden'
   organizationSubscriptions: unknown[]
   /**
    * `applied` moves the row in the fixture, the way the real command does; the other two
@@ -74,6 +93,23 @@ export const secondActiveMembership = {
   organization_id: '01991600-1000-7000-8000-000000000004',
   display_name: 'Movimiento Studio',
   type_code: 'studio',
+  status: 'active',
+  joined_at: '2025-02-01T09:11:53.204Z',
+  ended_at: null,
+  roles: ['coach'],
+}
+
+/**
+ * The holder, signed in. `membership_id` matches `relationshipState.holder`
+ * on purpose: in production both are `organization_memberships.id`, so a
+ * persona whose id differs could never be recognised as the holder — and the
+ * holder is the one actor `OP-REL-004` adds over its sibling operations.
+ */
+export const holderMembership = {
+  membership_id: '01991600-7000-7000-8000-000000000002',
+  organization_id: '01991600-1000-7000-8000-000000000002',
+  display_name: 'Allfit Gym',
+  type_code: 'gym',
   status: 'active',
   joined_at: '2025-02-01T09:11:53.204Z',
   ended_at: null,
@@ -198,7 +234,14 @@ export const relationshipState = {
       professional_person_id: '01991600-7000-7000-8000-000000000203',
       display_name: 'Daniela Hoyos',
       status: 'proposed',
-      valid_from: '2026-10-10T09:00:00.000Z',
+      /*
+       * Midnight UTC, because that is what `OP-REL-004` writes: the start is a
+       * calendar day cast to a timestamp, not an instant somebody picked. At
+       * 09:00 the screen rendered the right day in every timezone by accident,
+       * which is how a cover could read as starting a day early in production
+       * with every sweep green.
+       */
+      valid_from: '2026-10-10T00:00:00.000Z',
       ends_on: '2026-10-24',
       accepted_by_person_at: null,
     },
@@ -625,6 +668,9 @@ export function createStudioApiFixture(
     relationshipHistory: structuredClone(relationshipHistory),
     assignmentOutcome: 'created',
     reassignmentOutcome: 'reassigned',
+    substitutionOutcome: 'proposed',
+    substitutionEndOutcome: 'ended',
+    terminationOutcome: 'terminated',
     organizationSubscriptions: [structuredClone(activeSubscription)],
     subscriptionOutcome: 'applied',
     roleGrantOutcome: 'granted',
@@ -856,6 +902,138 @@ function defaultResponse(
         }
       })
       return { status: 200, body: { subscription_id: subscriptionId, status } }
+    }
+  }
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/termination$/.test(request.path)
+  ) {
+    if (fixture.terminationOutcome !== 'terminated') {
+      return {
+        status: fixture.terminationOutcome === 'already-ended' ? 409 : 403,
+        body: {
+          error: fixture.terminationOutcome === 'already-ended' ? 'conflict' : 'forbidden',
+        },
+      }
+    }
+    const current = fixture.relationshipState as Record<string, unknown>
+    const endedAt = '2026-11-04T15:20:00.000Z'
+    const grants = ((current.grants ?? []) as Array<Record<string, unknown>>).map((grant) =>
+      grant.status === 'active' ? { ...grant, status: 'frozen' } : grant,
+    )
+    fixture.relationshipState = {
+      ...current,
+      status: 'terminated',
+      ended_at: endedAt,
+      holder: null,
+      substitutions: ((current.substitutions ?? []) as Array<Record<string, unknown>>).map(
+        (cover) => (cover.status === 'active' ? { ...cover, status: 'ended' } : cover),
+      ),
+      grants,
+    }
+    return {
+      status: 200,
+      body: {
+        relationship_id: relationshipState.relationship_id,
+        person_id: relationshipState.person_id,
+        ended_at: endedAt,
+        frozen_grants: grants.filter((grant) => grant.status === 'frozen').length,
+        closed_assignments: 1,
+      },
+    }
+  }
+
+  const ending = request.path.match(
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/substitutions\/([^/]+)\/termination$/,
+  )
+  if (request.method === 'POST' && ending) {
+    if (fixture.substitutionEndOutcome !== 'ended') {
+      return {
+        status: fixture.substitutionEndOutcome === 'already-ended' ? 409 : 403,
+        body: {
+          error: fixture.substitutionEndOutcome === 'already-ended' ? 'conflict' : 'forbidden',
+        },
+      }
+    }
+    const current = fixture.relationshipState as Record<string, unknown>
+    const covers = (current.substitutions ?? []) as Array<Record<string, unknown>>
+    const endedAt = '2026-11-04T15:20:00.000Z'
+    fixture.relationshipState = {
+      ...current,
+      substitutions: covers.map((cover) =>
+        cover.assignment_id === ending[1] ? { ...cover, status: 'ended' } : cover,
+      ),
+    }
+    const closed = covers.find((cover) => cover.assignment_id === ending[1])
+    return {
+      status: 200,
+      body: {
+        assignment_id: ending[1],
+        relationship_id: relationshipState.relationship_id,
+        membership_id: closed?.membership_id ?? '',
+        professional_person_id: closed?.professional_person_id ?? '',
+        ended_at: endedAt,
+      },
+    }
+  }
+
+  if (
+    request.method === 'POST' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/relationships\/[^/]+\/substitutions$/.test(request.path)
+  ) {
+    if (fixture.substitutionOutcome !== 'proposed') {
+      return {
+        status: fixture.substitutionOutcome === 'already-proposed' ? 409 : 403,
+        body: {
+          error: fixture.substitutionOutcome === 'already-proposed' ? 'conflict' : 'forbidden',
+        },
+      }
+    }
+    const asked = (request.body ?? {}) as {
+      membership_id?: string
+      starts_on?: string
+      ends_on?: string
+    }
+    const cover = fixture.organizationMemberships.find(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'membership_id' in entry &&
+        entry.membership_id === asked.membership_id,
+    ) as { membership_id: string; display_name: string } | undefined
+    const assignmentId = '01991600-7000-7000-8000-000000000399'
+    /*
+     * The screen refetches rather than trusting the answer, so the fixture has
+     * to carry the new cover too — and it carries it as `proposed`, because
+     * proposing grants nothing until the person answers.
+     */
+    const current = fixture.relationshipState as Record<string, unknown>
+    fixture.relationshipState = {
+      ...current,
+      substitutions: [
+        ...((current.substitutions ?? []) as unknown[]),
+        {
+          assignment_id: assignmentId,
+          membership_id: cover?.membership_id ?? '',
+          professional_person_id: '01991600-7000-7000-8000-000000000299',
+          display_name: cover?.display_name ?? '',
+          valid_from: `${asked.starts_on}T00:00:00.000Z`,
+          status: 'proposed',
+          ends_on: asked.ends_on ?? null,
+          accepted_by_person_at: null,
+        },
+      ],
+    }
+    return {
+      status: 201,
+      body: {
+        assignment_id: assignmentId,
+        relationship_id: relationshipState.relationship_id,
+        membership_id: cover?.membership_id ?? '',
+        professional_person_id: '01991600-7000-7000-8000-000000000299',
+        starts_on: asked.starts_on ?? '',
+        ends_on: asked.ends_on ?? '',
+      },
     }
   }
   if (

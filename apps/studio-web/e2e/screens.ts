@@ -26,6 +26,7 @@ import {
   professionalCredential,
   endedRelationshipState,
   professionalProfile,
+  holderMembership,
   relationshipState,
   secondActiveMembership,
   terminatedMembership,
@@ -120,6 +121,65 @@ async function settleAnimations(page: Page): Promise<void> {
 
 const workspace = `/organizations/${activeMembership.organization_id}`
 const relationshipId = relationshipState.relationship_id
+
+/** Una corriendo y dos terminadas: el vínculo que ya acumuló historia. */
+function coversWithHistory() {
+  const cover = (id: string, name: string, status: string, from: string, to: string) => ({
+    assignment_id: id,
+    membership_id: '01991600-7000-7000-8000-000000000003',
+    professional_person_id: '01991600-7000-7000-8000-000000000203',
+    display_name: name,
+    status,
+    valid_from: from,
+    ends_on: to,
+    accepted_by_person_at: from,
+  })
+  return {
+    ...relationshipState,
+    substitutions: [
+      cover(
+        '01991600-7000-7000-8000-000000000420',
+        'Daniela Hoyos',
+        'ended',
+        '2026-03-01T00:00:00.000Z',
+        '2026-03-12',
+      ),
+      cover(
+        '01991600-7000-7000-8000-000000000421',
+        'Sara Posada',
+        'active',
+        '2026-01-10T00:00:00.000Z',
+        '2026-12-20',
+      ),
+      cover(
+        '01991600-7000-7000-8000-000000000422',
+        'Elena Soto',
+        'ended',
+        '2026-08-05T00:00:00.000Z',
+        '2026-08-19',
+      ),
+    ],
+  }
+}
+
+/** The fixture's cover is `proposed`; this one is actually running. */
+function runningCover() {
+  return {
+    ...relationshipState,
+    substitutions: [
+      {
+        assignment_id: '01991600-7000-7000-8000-000000000402',
+        membership_id: '01991600-7000-7000-8000-000000000003',
+        professional_person_id: '01991600-7000-7000-8000-000000000203',
+        display_name: 'Daniela Hoyos',
+        status: 'active',
+        valid_from: '2026-10-10T00:00:00.000Z',
+        ends_on: '2026-10-24',
+        accepted_by_person_at: '2026-10-09T18:00:00.000Z',
+      },
+    ],
+  }
+}
 
 const memberOfTwo = () =>
   createStudioApiFixture({
@@ -984,6 +1044,190 @@ export const SCREENS: Screen[] = [
     reveal: async (page) => {
       await page.getByRole('button', { name: 'Cambiar' }).click()
       await expect(page.getByText(/No hay otro entrenador activo/)).toBeVisible()
+    },
+  },
+  {
+    // HU-029. The dialog open, which is the state worth looking at: its first
+    // sentence is the only thing standing between "Proponer" and an
+    // administrator believing the client is already covered.
+    stories: 'HU-029 · the question put before a cover is proposed',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Proponer suplencia' }).click()
+      await expect(page.getByText(/No pasa nada hasta que la persona acepte/)).toBeVisible()
+    },
+  },
+  {
+    // Two date fields side by side and an error under them. A field grid that
+    // collapses badly, or a message that crowds the footer, shows here and in
+    // no other state.
+    stories: 'HU-029 · a cover with no end date, refused before the round trip',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      // Tomorrow, in the reader's own timezone, so the start is the one thing
+      // the dialog has no objection to and the end date is left alone.
+      const pad = (value: number) => `${value}`.padStart(2, '0')
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const startsOn = [
+        tomorrow.getFullYear(),
+        pad(tomorrow.getMonth() + 1),
+        pad(tomorrow.getDate()),
+      ].join('-')
+
+      await page.getByRole('button', { name: 'Proponer suplencia' }).click()
+      await page.getByRole('combobox', { name: 'Quién cubre' }).click()
+      await page.getByRole('option', { name: 'Daniela Hoyos' }).click()
+      await page.getByLabel('Desde').fill(startsOn)
+      await page.getByRole('button', { name: 'Proponer y preguntar' }).click()
+      await expect(page.getByText(/corta el acceso cuando termina/)).toBeVisible()
+    },
+  },
+  {
+    /*
+     * A cover in the list, which until STUDIO-94 nothing could create, so no
+     * sweep had ever drawn one. Beside a badge reading "Esperando respuesta"
+     * the dates had ten characters of column left and broke mid-date; the
+     * layout sweep is where that belongs, not a pair of eyes.
+     */
+    stories: 'HU-029 · a cover waiting for an answer, in the list',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState,
+      }),
+    reveal: async (page) => {
+      await expect(page.locator('[data-relationship-substitution-list]')).toContainText(
+        'Daniela Hoyos',
+      )
+    },
+  },
+  {
+    // The holder reading their own client. Since STUDIO-94 the action is
+    // offered to them without any capability to assign, and the card has to
+    // hold a heading and a button on one line at both widths.
+    stories: 'HU-029 · the holder, who may ask for cover on their own client',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [holderMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: { ...relationshipState, substitutions: [] },
+      }),
+    reveal: async (page) => {
+      await expect(page.getByRole('button', { name: 'Proponer suplencia' })).toBeVisible()
+    },
+  },
+  {
+    /*
+     * HU-030. A cover that is running, which is the only kind that can be cut
+     * short — and the row now carries a third thing beside the name and the
+     * badge. Stacked on a phone that is three lines where there were two.
+     */
+    stories: 'HU-030 · una suplencia corriendo, con la acción de terminarla',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: runningCover(),
+      }),
+    reveal: async (page) => {
+      await expect(page.getByRole('button', { name: 'Terminar', exact: true })).toBeVisible()
+    },
+  },
+  {
+    /*
+     * The question itself. It is the one dialog in this card that takes an
+     * access away rather than asking for one, so it is an `AlertDialog` and its
+     * confirm button is destructive — worth looking at beside its siblings.
+     */
+    stories: 'HU-030 · la pregunta antes de cortar un acceso',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: runningCover(),
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Terminar', exact: true }).click()
+      await expect(
+        page.getByText(/dejará de ver los datos de esta persona ahora mismo/),
+      ).toBeVisible()
+    },
+  },
+  {
+    /*
+     * HU-031. Un vínculo con historia: una suplencia corriendo y dos
+     * terminadas. El servidor las entrega de la más vieja a la más nueva, así
+     * que esta pantalla es donde se ve que la accionable encabeza la lista en
+     * vez de quedar sepultada — y a la vez, cómo se lee una lista larga en un
+     * teléfono.
+     */
+    stories: 'HU-031 · las suplencias de un cliente con historia',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState: coversWithHistory(),
+      }),
+    reveal: async (page) => {
+      await expect(
+        page.locator('[data-relationship-substitution-list] > li').first(),
+      ).toContainText('Cubriendo')
+    },
+  },
+  {
+    /*
+     * HU-032. La acción más pesada de Studio, en su sitio: al final de la
+     * ficha, separada del resto, para que nadie la encuentre de camino a otra
+     * cosa.
+     */
+    stories: 'HU-032 · la ficha con la acción de terminar el vínculo',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState,
+      }),
+    reveal: async (page) => {
+      await expect(page.getByRole('button', { name: 'Terminar el vínculo' })).toBeVisible()
+    },
+  },
+  {
+    /*
+     * El diálogo. Dice tres cosas que nadie adivina, en dos frases, y además
+     * lleva un campo. En un teléfono es donde se ve si cabe o si el pie se sale
+     * de la pantalla.
+     */
+    stories: 'HU-032 · la pregunta antes de cerrar la atención a alguien',
+    path: `${workspace}/clients/${relationshipId}`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organizationMemberships: coachedTeam(),
+        relationshipState,
+      }),
+    reveal: async (page) => {
+      await page.getByRole('button', { name: 'Terminar el vínculo' }).click()
+      await expect(page.getByText(/Pasa ahora mismo, sin preaviso/)).toBeVisible()
     },
   },
   // --- `/organizations/[id]/clients/[relationshipId]/history` · HU-026 ---

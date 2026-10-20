@@ -141,6 +141,7 @@ export type PlatformDutyClosure = PlatformCommandContext & {
  * closed set rather than a free query.
  */
 export type SupportPersonMetadata = AllfitV1Schemas['SupportPersonMetadata']
+export type SupportPersonPayments = AllfitV1Schemas['SupportPersonPayments']
 export type SupportPeopleSearch = AllfitV1Schemas['SupportPeopleSearch']
 
 export type SupportLookupKind = 'identifier' | 'email' | 'phone'
@@ -167,6 +168,13 @@ export interface SupportMetadataDatabase {
       lookupValue: string
     },
   ): Promise<SupportPersonMetadata | undefined>
+  payments(
+    input: SupportReader & {
+      requestId: string
+      caseReference: string
+      personId: string
+    },
+  ): Promise<SupportPersonPayments>
   read(
     input: SupportReader & {
       requestId: string
@@ -300,6 +308,21 @@ export interface BreakGlassCommandResult {
   replayed: boolean
 }
 
+export type BreakGlassReviewOutcome = 'justified' | 'unjustified' | 'incident_opened'
+
+export const BREAK_GLASS_REVIEW_OUTCOMES: readonly BreakGlassReviewOutcome[] = [
+  'justified',
+  'unjustified',
+  'incident_opened',
+]
+
+export type BreakGlassReview = AllfitV1Schemas['BreakGlassReview']
+
+export interface BreakGlassReviewResult {
+  resource: BreakGlassReview
+  replayed: boolean
+}
+
 export interface BreakGlassDatabase {
   request(
     input: PlatformCommandContext & {
@@ -333,6 +356,20 @@ export interface BreakGlassDatabase {
       breakGlassRequestId: string
     },
   ): Promise<BreakGlassCommandResult>
+  review(
+    input: PlatformCommandContext & {
+      actorPersonId: string
+      actorSessionId: string
+      breakGlassRequestId: string
+      outcome: BreakGlassReviewOutcome
+    },
+  ): Promise<BreakGlassReviewResult>
+  reviewQueue(input: {
+    actorPersonId: string
+    actorSessionId: string
+    requestId: string
+    limit: number
+  }): Promise<BreakGlassReview[]>
   list(input: {
     actorPersonId: string
     actorSessionId: string

@@ -17,11 +17,32 @@
 -- failing twice in the window is a notice. A tripped delivery circuit is listed on
 -- its own, because it already is the repetition detector.
 --
--- **What has no table is not modelled.** Payments and subscriptions do not exist yet.
+-- **What has no table is not modelled.** Payments arrived on 2026-10-12, so criterion 1
+-- is answered now: the charges a store could not collect, the renewals in grace and the
+-- plans already paused. A gym charge that fails is still invisible —the gateway worker
+-- of `OP-PAY-016` records it and is not built— so that half says `not_modelled` instead
+-- of zero, which would claim the gyms are collecting everything.
 
 begin;
 
-select plan(22);
+select plan(26);
+
+/*
+ * The panel, read the way the API reads it: the operator asked about is also the actor
+ * of the transaction. It matters now because the billing notice counts rows whose
+ * policy asks who is reading, and a disagreement is refused rather than counted as
+ * zero. Four operators read this panel, so each read sets its own actor.
+ */
+create function pg_temp.panel_for(p_person uuid, p_session uuid)
+returns jsonb
+language plpgsql
+as $fn$
+begin
+  perform set_config('app.actor_kind', 'support', true);
+  perform set_config('app.actor_person_id', p_person::text, true);
+  return support.read_attention_panel(p_person, p_session);
+end
+$fn$;
 
 insert into identity.people (id, given_name, family_name, status, contact_email)
 values
@@ -127,7 +148,7 @@ from (values
 -- ---------------------------------------------------------------------------
 
 select throws_ok(
-  $$ select support.read_attention_panel(
+  $$ select pg_temp.panel_for(
     '019ae000-0000-7000-8000-000000000006', '019ae000-0000-7000-8000-000000000046'
   ) $$,
   '42501',
@@ -136,7 +157,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select support.read_attention_panel(
+  $$ select pg_temp.panel_for(
     '019ae000-0000-7000-8000-000000000007', '019ae000-0000-7000-8000-000000000047'
   ) $$,
   '42501',
@@ -145,7 +166,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select support.read_attention_panel(
+  $$ select pg_temp.panel_for(
     '019ae000-0000-7000-8000-000000000005', '019ae000-0000-7000-8000-000000000043'
   ) $$,
   '42501',
@@ -156,17 +177,17 @@ select throws_ok(
 -- What each operator saw before anything needed attention, so every count below is
 -- a difference this test caused rather than whatever the database already held.
 create temporary table support_before on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000003', '019ae000-0000-7000-8000-000000000043'
 ) as panel;
 
 create temporary table lifecycle_before on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000004', '019ae000-0000-7000-8000-000000000044'
 ) as panel;
 
 create temporary table verifier_before on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000005', '019ae000-0000-7000-8000-000000000045'
 ) as panel;
 
@@ -306,37 +327,171 @@ insert into system.outbox_delivery_circuits (
     clock_timestamp() + interval '1 hour'),
   ('attention.dead_probe.v1', 'closed', clock_timestamp() - interval '1 hour', 40, 0, null);
 
+-- Three things the billing notice is about, each in the state an operator would act on:
+-- a Pro renewal the store could not collect, a Pro subscription already suspended, and
+-- a gym plan paused for not paying. Inserted in the state the commands leave behind;
+-- `T-PAY-PRO-01` and `T-PAY-LIFECYCLE-01` own the commands themselves.
+insert into payments.platform_plans (
+  id, code, name, plan_kind, status, created_by_person_id, created_by_duty_assignment_id
+)
+select '019ae000-0000-7000-8000-000000000801', 'pro', 'Pro', 'paid', 'published',
+  '019ae000-0000-7000-8000-000000000001', duty.id
+from support.platform_duty_assignments as duty
+where duty.person_id = '019ae000-0000-7000-8000-000000000010'
+  and duty.duty_code = 'view_billing_metadata';
+
+insert into payments.platform_plan_versions (
+  id, platform_plan_id, plan_kind, version_number, amount_minor, currency_code,
+  billing_period, status, proposed_by_person_id, proposed_by_duty_assignment_id,
+  published_by_person_id, published_by_duty_assignment_id, published_at
+)
+select '019ae000-0000-7000-8000-000000000802', '019ae000-0000-7000-8000-000000000801',
+  'paid', 1, 1990000, 'COP', 'month', 'published',
+  '019ae000-0000-7000-8000-000000000001', duty.id,
+  '019ae000-0000-7000-8000-000000000002', duty.id, clock_timestamp()
+from support.platform_duty_assignments as duty
+where duty.person_id = '019ae000-0000-7000-8000-000000000010'
+  and duty.duty_code = 'view_billing_metadata';
+
+insert into payments.platform_store_products (store, product_id, platform_plan_version_id)
+values ('app_store', 'allfit.pro.monthly.attn', '019ae000-0000-7000-8000-000000000802');
+
+insert into identity.people (id, given_name, family_name, status)
+values
+  ('019ae000-0000-7000-8000-000000000811', 'Gracia', 'Pendiente', 'active'),
+  ('019ae000-0000-7000-8000-000000000812', 'Suspendida', 'Pro', 'active'),
+  ('019ae000-0000-7000-8000-000000000813', 'Suspendida', 'Gimnasio', 'active');
+
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, grace_until, last_observed_at
+)
+values
+  ('019ae000-0000-7000-8000-000000000821', '019ae000-0000-7000-8000-000000000811',
+    '019ae000-0000-7000-8000-000000000802', 'app_store', 'allfit.pro.monthly.attn',
+    'ref-attn-grace', 'production', 'grace', true,
+    clock_timestamp() - interval '1 day', clock_timestamp() + interval '6 days',
+    clock_timestamp());
+
+insert into payments.platform_subscriptions (
+  id, person_id, platform_plan_version_id, store, store_product_id, store_subscription_ref,
+  environment, status, auto_renews, current_period_end, suspended_at, last_observed_at
+)
+values
+  ('019ae000-0000-7000-8000-000000000822', '019ae000-0000-7000-8000-000000000812',
+    '019ae000-0000-7000-8000-000000000802', 'app_store', 'allfit.pro.monthly.attn',
+    'ref-attn-suspended', 'production', 'suspended', true,
+    clock_timestamp() - interval '10 days', clock_timestamp() - interval '3 days',
+    clock_timestamp());
+
+insert into payments.platform_payment_records (
+  platform_subscription_id, person_id, store, store_transaction_id, amount_minor,
+  currency_code, result, failure_code, occurred_at
+)
+values
+  ('019ae000-0000-7000-8000-000000000821', '019ae000-0000-7000-8000-000000000811',
+    'app_store', 'txn-attn-failed', 1990000, 'COP', 'failed', 'billing_retry',
+    clock_timestamp() - interval '3 hours'),
+  -- Older than the window. It failed, and it is not what needs attention now.
+  ('019ae000-0000-7000-8000-000000000822', '019ae000-0000-7000-8000-000000000812',
+    'app_store', 'txn-attn-old', 1990000, 'COP', 'failed', 'billing_retry',
+    clock_timestamp() - interval '5 days');
+
+insert into organizations.organizations (id, type_code, display_name, responsible_party, status)
+values ('019ae000-0000-7000-8000-000000000831', 'gym', 'Gimnasio Atencion',
+  '{"party_kind":"legal_entity","party_name":"Atencion SAS","purpose":"studio_operations"}',
+  'active');
+
+insert into relationships.service_relationships (id, person_id, organization_id, status)
+values ('019ae000-0000-7000-8000-000000000841', '019ae000-0000-7000-8000-000000000813',
+  '019ae000-0000-7000-8000-000000000831', 'active');
+
+insert into payments.organization_plans (id, organization_id, name, status)
+values ('019ae000-0000-7000-8000-000000000851', '019ae000-0000-7000-8000-000000000831',
+  'Mensual', 'published');
+
+insert into payments.plan_versions (
+  id, plan_id, organization_id, version_number, amount_minor, currency_code,
+  billing_period, status, published_at
+)
+values ('019ae000-0000-7000-8000-000000000852', '019ae000-0000-7000-8000-000000000851',
+  '019ae000-0000-7000-8000-000000000831', 1, 12000000, 'COP', 'month', 'published',
+  clock_timestamp());
+
+insert into payments.plan_subscriptions (
+  id, person_id, organization_id, plan_version_id, status, current_period_end,
+  started_at, suspended_at
+)
+values ('019ae000-0000-7000-8000-000000000861', '019ae000-0000-7000-8000-000000000813',
+  '019ae000-0000-7000-8000-000000000831', '019ae000-0000-7000-8000-000000000852',
+  'suspended', (clock_timestamp() + interval '10 days')::date,
+  clock_timestamp() - interval '40 days', clock_timestamp() - interval '2 days');
 create temporary table support_after on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000003', '019ae000-0000-7000-8000-000000000043'
 ) as panel;
 
 create temporary table lifecycle_after on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000004', '019ae000-0000-7000-8000-000000000044'
 ) as panel;
 
 create temporary table verifier_after on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000005', '019ae000-0000-7000-8000-000000000045'
 ) as panel;
 
 create temporary table billing_after on commit drop as
-select support.read_attention_panel(
+select pg_temp.panel_for(
   '019ae000-0000-7000-8000-000000000010', '019ae000-0000-7000-8000-000000000050'
 ) as panel;
 
 -- ---------------------------------------------------------------------------
--- Criterion 1 — payments have no table yet
+-- Criterion 1 — the charges that failed and the plans in pause
 -- ---------------------------------------------------------------------------
 
 select ok(
-  (select bool_and(panel->'billing'->>'availability' = 'not_modelled')
+  (select panel->'billing'->>'availability' = 'available'
+     and (panel->'billing'->>'window_hours')::integer = 24
+   from billing_after),
+  'whoever holds the billing duty is told what needs attention about the money'
+);
+
+select ok(
+  (select bool_and(panel->'billing'->>'availability' = 'withheld')
    from (
      select panel from support_after union all select panel from lifecycle_after
-     union all select panel from verifier_after union all select panel from billing_after
+     union all select panel from verifier_after
    ) as panels),
-  'failed charges and suspended subscriptions are not modelled, never zero'
+  'and whoever does not hold it is told nothing, never zero'
+);
+
+select results_eq(
+  $$ select (panel->'billing'->>'failed_platform_charges')::integer,
+            (panel->'billing'->>'platform_subscriptions_in_grace')::integer,
+            (panel->'billing'->>'platform_subscriptions_suspended')::integer,
+            (panel->'billing'->>'organization_subscriptions_suspended')::integer
+     from billing_after $$,
+  $$ values (1, 1, 1, 1) $$,
+  'one charge failed inside the window, one renewal is in grace, one Pro and one gym plan are paused'
+);
+
+-- A gym charge that fails is invisible until the gateway worker exists: `OP-PAY-016`
+-- records what a provider reports and is not built. Zero here would say the gyms are
+-- collecting everything, which is a claim this platform cannot make.
+select is(
+  (select panel->'billing'->>'failed_organization_charges_availability' from billing_after),
+  'not_modelled',
+  'and a failed charge of a gym is not modelled rather than counted as none'
+);
+
+-- The notice names nobody. It is a counter, and reaching the person behind it goes
+-- through the door that asks for a case reference.
+select ok(
+  (select position('019ae000-0000-7000-8000-00000000081' in panel->>'billing') = 0
+     and position('Suspendida' in panel->>'billing') = 0
+   from billing_after),
+  'no person and no gym travels in the billing notice: counters only'
 );
 
 select ok(

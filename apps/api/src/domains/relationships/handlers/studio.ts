@@ -13,6 +13,7 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
+import { parseSubstitutionCursor, presentSubstitutionPage } from './substitution-page.js'
 import {
   clientDirectoryService,
   holderAssignmentService,
@@ -20,6 +21,9 @@ import {
   relationshipHistoryService,
   relationshipStateService,
   substitutionProposalService,
+  substitutionTerminationService,
+  substitutionListService,
+  relationshipTerminationService,
 } from '../dependencies.js'
 import {
   RelationshipsError,
@@ -29,6 +33,9 @@ import {
   type RelationshipHistoryService,
   type RelationshipStateService,
   type SubstitutionProposalService,
+  type SubstitutionTerminationService,
+  type SubstitutionListService,
+  type RelationshipTerminationService,
 } from '../application/index.js'
 import type {
   DirectoryEntry,
@@ -59,6 +66,9 @@ export interface StudioRelationshipDependencies {
   readonly reassignments?: HolderReassignmentService
   readonly histories?: RelationshipHistoryService
   readonly substitutions?: SubstitutionProposalService
+  readonly terminations?: SubstitutionTerminationService
+  readonly substitutionPages?: SubstitutionListService
+  readonly relationshipTerminations?: RelationshipTerminationService
 }
 
 export function studioRelationshipRoutes(injected: StudioRelationshipDependencies = {}): Hono {
@@ -69,6 +79,10 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
   const reassignments = () => injected.reassignments ?? holderReassignmentService()
   const histories = () => injected.histories ?? relationshipHistoryService()
   const substitutions = () => injected.substitutions ?? substitutionProposalService()
+  const terminations = () => injected.terminations ?? substitutionTerminationService()
+  const substitutionPages = () => injected.substitutionPages ?? substitutionListService()
+  const relationshipEndings = () =>
+    injected.relationshipTerminations ?? relationshipTerminationService()
   const sessions = () => injected.sessions ?? studioSessionService()
   const routes = new Hono()
 
@@ -375,6 +389,150 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
     },
   )
 
+  /*
+   * `OP-REL-008`. The heaviest command on this surface: it ends the
+   * relationship, freezes every permission it carried and closes every
+   * assignment, all at one instant and all or nothing.
+   *
+   * The body is optional and carries at most a reason, so a request with no
+   * body at all is valid. What makes the command idempotent is hashed from the
+   * body and the relationship together: two different relationships ended under
+   * one key must not replay each other's answer.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/termination',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const body = (await readJson(c)) ?? {}
+      if (!isTerminationRequest(body)) return fail(c, 'validation-failed')
+      const command = commandContext(c, { relationshipId, ...body })
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await relationshipEndings().terminate(actor, {
+          organizationId,
+          relationshipId,
+          ...(body.reason === undefined ? {} : { reason: body.reason }),
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json({
+          relationship_id: result.resource.relationshipId,
+          person_id: result.resource.personId,
+          ended_at: result.resource.endedAt.toISOString(),
+          frozen_grants: result.resource.frozenGrants,
+          closed_assignments: result.resource.closedAssignments,
+        })
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * `OP-REL-013`. Who has covered this client, newest first.
+   *
+   * The relationship document already carries its covers, so this exists for
+   * two things the document cannot do: it orders them so the running one is
+   * first rather than last, and it pages, which a document embedding an
+   * unbounded list cannot.
+   *
+   * A finished cover listed here grants nothing. That is not this route's
+   * promise to keep — validity is read from the same dates everywhere — but it
+   * is the thing a reader of this list most needs to be true.
+   */
+  routes.get(
+    '/organizations/:organizationId/relationships/:relationshipId/substitutions',
+    async (c) => {
+      c.header('Cache-Control', 'private, no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId)) {
+        return fail(c, 'invalid-request')
+      }
+      const limit = parseLimit(c.req.query('limit'))
+      if (!limit) return fail(c, 'validation-failed')
+      const cursor = parseSubstitutionCursor(c.req.query('cursor'), (id) => UUID.test(id))
+      if (cursor === null) return fail(c, 'validation-failed')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const page = await substitutionPages().list(actor, {
+          organizationId,
+          relationshipId,
+          limit,
+          ...(cursor ?? {}),
+        })
+        return c.json(presentSubstitutionPage(page))
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
+  /*
+   * `OP-REL-006`. The mirror of the route above, and deliberately not its
+   * mirror in who may call it: proposing a cover accepts the coach in charge,
+   * ending one does not. An administrator or owner here; the person has her own
+   * route in Space.
+   *
+   * No body, so the hash that makes the command idempotent is taken from what
+   * the path names. Hashing an empty object instead would let one key replay
+   * across two different covers.
+   */
+  routes.post(
+    '/organizations/:organizationId/relationships/:relationshipId/substitutions/:substitutionId/termination',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+      if (c.req.header('origin') !== studioOrigin) {
+        return fail(c, 'forbidden', 'origin is not allowed')
+      }
+      const organizationId = c.req.param('organizationId')
+      const relationshipId = c.req.param('relationshipId')
+      const substitutionId = c.req.param('substitutionId')
+      if (!UUID.test(organizationId) || !UUID.test(relationshipId) || !UUID.test(substitutionId)) {
+        return fail(c, 'invalid-request')
+      }
+      const command = commandContext(c, { relationshipId, substitutionId })
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      try {
+        const actor = await studioActor(c, sessions())
+        if (actor instanceof Response) return actor
+        const result = await terminations().end(actor, {
+          organizationId,
+          relationshipId,
+          assignmentId: substitutionId,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json({
+          assignment_id: result.resource.assignmentId,
+          relationship_id: result.resource.relationshipId,
+          membership_id: result.resource.membershipId,
+          professional_person_id: result.resource.professionalPersonId,
+          ended_at: result.resource.endedAt,
+        })
+      } catch (error) {
+        return failure(c, error)
+      }
+    },
+  )
+
   return routes
 }
 
@@ -661,4 +819,19 @@ function encodeClientCursor(
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+/**
+ * A body that is absent, empty, or carries a reason and nothing else. A blank
+ * reason is refused rather than trimmed away: a request that sends one is a
+ * caller who thinks they gave a reason.
+ */
+function isTerminationRequest(value: unknown): value is { reason?: string } {
+  if (!isObject(value)) return false
+  const keys = Object.keys(value)
+  if (keys.length === 0) return true
+  if (keys.length > 1 || keys[0] !== 'reason') return false
+  return (
+    typeof value.reason === 'string' && value.reason.trim() !== '' && value.reason.length <= 2000
+  )
 }

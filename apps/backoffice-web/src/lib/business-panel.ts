@@ -11,11 +11,19 @@
  * Every figure is shown with the period it was measured over, and a figure whose
  * period is missing is not shown at all: it would be a number the reader would
  * date themselves.
+ *
+ * **What stopped is shown beside what continues.** The subscriptions Allfit has open
+ * are read by state, and the states add up to the total. Showing only the collecting
+ * one would describe a business that never loses anybody, which is the single wrong
+ * conclusion this screen can produce on its own.
  */
 
 import type { AllfitV1Schemas } from '@allfitone/contracts'
 
+import { formatAmount } from './platform-plans'
+
 export type SupportBusinessPanel = AllfitV1Schemas['SupportBusinessPanel']
+export type SupportBusinessMoneyMetric = AllfitV1Schemas['SupportBusinessMoneyMetric']
 export type SupportBusinessMetric = AllfitV1Schemas['SupportBusinessMetric']
 export type SupportBusinessMetricKey = AllfitV1Schemas['SupportBusinessMetricKey']
 export type SupportBusinessMetricPeriod = AllfitV1Schemas['SupportBusinessMetricPeriod']
@@ -59,7 +67,12 @@ const METRIC_SECTIONS: Record<string, BusinessSectionKey> = {
   operating_organizations: 'organizations',
   unclaimed_organizations: 'organizations',
   active_subscriptions: 'money',
-  billed_this_month: 'money',
+  suspended_subscriptions: 'money',
+  lapsed_subscriptions: 'money',
+  open_subscriptions: 'money',
+  active_organization_subscriptions: 'money',
+  pro_people_paying_allfit: 'money',
+  pro_people_through_organization: 'money',
   premium_people: 'money',
 }
 
@@ -72,8 +85,14 @@ const METRIC_LABELS: Record<string, string> = {
   operating_organizations: 'Gimnasios operando',
   unclaimed_organizations: 'Gimnasios sin reclamar',
   active_subscriptions: 'Suscripciones activas',
+  suspended_subscriptions: 'Suscripciones suspendidas',
+  lapsed_subscriptions: 'Suscripciones vencidas sin reportar',
+  open_subscriptions: 'Suscripciones abiertas',
+  active_organization_subscriptions: 'Planes de gimnasio activos',
+  pro_people_paying_allfit: 'Con Pro, pagándole a Allfit',
+  pro_people_through_organization: 'Con Pro, por su gimnasio',
+  premium_people: 'Personas con Pro',
   billed_this_month: 'Facturado',
-  premium_people: 'Personas Premium',
 }
 
 const METRIC_HINTS: Record<string, string> = {
@@ -86,7 +105,22 @@ const METRIC_HINTS: Record<string, string> = {
   organizations: 'Todos, sin importar en qué estado estén.',
   operating_organizations: 'Reclamados, no cerrados y con al menos una persona en el equipo.',
   unclaimed_organizations: 'Allfit los creó y su dueño todavía no los aceptó.',
-  premium_people: 'Y por cuál ruta llegaron a Premium.',
+  active_subscriptions:
+    'Las que siguen dando Pro: al día, o dentro del plazo de gracia que la tienda da tras un cobro fallido.',
+  suspended_subscriptions:
+    'La tienda dejó de cobrarlas y lo reportó. Es la misma cifra que cuenta el aviso de cobros.',
+  lapsed_subscriptions:
+    'Se les acabó el periodo o el plazo de gracia y la tienda todavía no dice si se renovaron o se suspendieron. Solo la tienda mueve ese estado.',
+  open_subscriptions:
+    'Todas las que no están cerradas. Es la suma exacta de las tres de arriba, así que lo que falte está en una de ellas.',
+  active_organization_subscriptions:
+    'Lo que las personas le pagan a su gimnasio. El gimnasio lo cobra en su propia pasarela: no es ingreso de Allfit y no pasa por aquí.',
+  pro_people_paying_allfit: 'Compraron Pro en App Store o Google Play.',
+  pro_people_through_organization:
+    'Lo tienen por entrenar en un gimnasio que opera. Quien además le paga a Allfit se cuenta arriba y no aquí.',
+  premium_people: 'Las dos rutas sumadas, cada persona una sola vez.',
+  billed_this_month:
+    'Lo que las tiendas reportaron como cobrado. Un cobro fallido no cuenta, y cada moneda va aparte.',
 }
 
 const REASONS: Record<string, string> = {
@@ -95,6 +129,27 @@ const REASONS: Record<string, string> = {
 }
 
 export const NOT_MODELLED_NOTE = 'Allfit todavía no guarda los datos para esta cifra.'
+
+export const NOTHING_BILLED = 'Nada cobrado todavía este mes.'
+
+/**
+ * What Allfit billed, one line per currency. They are never added together: a total
+ * mixing pesos and dollars would be a number that means nothing, and the API sends them
+ * apart for that reason.
+ */
+export function moneyLines(metric: SupportBusinessMoneyMetric): string[] {
+  if (metric.availability !== 'available' || metric.amounts === null) return []
+  if (metric.amounts.length === 0) return [NOTHING_BILLED]
+  return metric.amounts.map((amount) => formatAmount(amount.amount_minor, amount.currency_code))
+}
+
+export function moneyNote(metric: SupportBusinessMoneyMetric, minimum: number): string | null {
+  if (metric.availability === 'available') return null
+  if (metric.availability === 'below_threshold') {
+    return `Menos de ${minimum} personas pagaron. No se publica el monto porque con tan pocas se puede deducir lo que paga cada una.`
+  }
+  return (metric.reason ? REASONS[metric.reason] : null) ?? NOT_MODELLED_NOTE
+}
 
 /** The metrics, in the order the API published them, grouped by what they answer. */
 export function businessSections(panel: SupportBusinessPanel): BusinessSection[] {

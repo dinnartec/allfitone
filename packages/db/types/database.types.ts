@@ -10,6 +10,10 @@ export type Database = {
     }
     Functions: {
       account: { Args: never; Returns: string }
+      acting_person_is: {
+        Args: { p_actor_person_id: string }
+        Returns: boolean
+      }
       actor_kind: {
         Args: never
         Returns: Database['identity']['Enums']['actor_kind']
@@ -3586,6 +3590,70 @@ export type Database = {
           },
         ]
       }
+      organization_suspensions: {
+        Row: {
+          ended_at: string | null
+          ended_by_duty_assignment_id: string | null
+          ended_by_person_id: string | null
+          ended_event_id: string | null
+          id: string
+          organization_id: string
+          reason_code: string
+          started_at: string
+          started_by_duty_assignment_id: string
+          started_by_person_id: string
+          started_event_id: string
+        }
+        Insert: {
+          ended_at?: string | null
+          ended_by_duty_assignment_id?: string | null
+          ended_by_person_id?: string | null
+          ended_event_id?: string | null
+          id?: string
+          organization_id: string
+          reason_code: string
+          started_at?: string
+          started_by_duty_assignment_id: string
+          started_by_person_id: string
+          started_event_id: string
+        }
+        Update: {
+          ended_at?: string | null
+          ended_by_duty_assignment_id?: string | null
+          ended_by_person_id?: string | null
+          ended_event_id?: string | null
+          id?: string
+          organization_id?: string
+          reason_code?: string
+          started_at?: string
+          started_by_duty_assignment_id?: string
+          started_by_person_id?: string
+          started_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_organization_suspensions_ended_event'
+            columns: ['ended_event_id']
+            isOneToOne: false
+            referencedRelation: 'organization_events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_organization_suspensions_organization'
+            columns: ['organization_id']
+            isOneToOne: false
+            referencedRelation: 'organizations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_organization_suspensions_started_event'
+            columns: ['started_event_id']
+            isOneToOne: false
+            referencedRelation: 'organization_events'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       organization_type_transitions: {
         Row: {
           created_at: string
@@ -3652,12 +3720,14 @@ export type Database = {
           claimed_at: string | null
           created_at: string
           display_name: string
+          guest_quota_seats: number | null
           id: string
           legal_name: string | null
           responsible_party: Json
           responsible_party_schema_version: number
           revision_number: number
           status: Database['organizations']['Enums']['organization_status']
+          suspended_at: string | null
           type_code: string
           updated_at: string
         }
@@ -3666,12 +3736,14 @@ export type Database = {
           claimed_at?: string | null
           created_at?: string
           display_name: string
+          guest_quota_seats?: number | null
           id?: string
           legal_name?: string | null
           responsible_party: Json
           responsible_party_schema_version?: number
           revision_number?: number
           status?: Database['organizations']['Enums']['organization_status']
+          suspended_at?: string | null
           type_code: string
           updated_at?: string
         }
@@ -3680,12 +3752,14 @@ export type Database = {
           claimed_at?: string | null
           created_at?: string
           display_name?: string
+          guest_quota_seats?: number | null
           id?: string
           legal_name?: string | null
           responsible_party?: Json
           responsible_party_schema_version?: number
           revision_number?: number
           status?: Database['organizations']['Enums']['organization_status']
+          suspended_at?: string | null
           type_code?: string
           updated_at?: string
         }
@@ -3818,6 +3892,10 @@ export type Database = {
           result: Json
         }[]
       }
+      guest_quota_projection: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       handover_projection: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -3895,9 +3973,35 @@ export type Database = {
           name: string
         }[]
       }
+      organization_guest_occupancy: {
+        Args: { p_organization_id: string }
+        Returns: {
+          invitations_pending: number
+          occupied: number
+          relationships_active: number
+        }[]
+      }
       organization_projection: {
         Args: { p_organization_id: string }
         Returns: Json
+      }
+      organization_suspension_projection: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      reactivate_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
       }
       read_backoffice_organization: {
         Args: {
@@ -3924,6 +4028,10 @@ export type Database = {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: string
       }
+      require_platform_commercial_duty: {
+        Args: { p_actor_person_id: string; p_actor_session_id: string }
+        Returns: string
+      }
       resend_ownership_invitation: {
         Args: {
           p_actor_person_id: string
@@ -3940,7 +4048,37 @@ export type Database = {
           result: Json
         }[]
       }
+      set_organization_guest_quota: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_request_hash: string
+          p_seats: number
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       site_projection: { Args: { p_site_id: string }; Returns: Json }
+      suspend_organization: {
+        Args: {
+          p_actor_person_id: string
+          p_actor_session_id: string
+          p_command_id: string
+          p_idempotency_key: string
+          p_organization_id: string
+          p_reason_code: string
+          p_request_hash: string
+        }
+        Returns: {
+          replayed: boolean
+          result: Json
+        }[]
+      }
       transfer_ownership: {
         Args: {
           p_command_id: string
@@ -4005,7 +4143,7 @@ export type Database = {
     }
     Enums: {
       membership_status: 'active' | 'terminated'
-      organization_status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+      organization_status: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5595,7 +5733,7 @@ export const Constants = {
   organizations: {
     Enums: {
       membership_status: ['active', 'terminated'],
-      organization_status: ['unclaimed', 'active', 'closed', 'cancelled'],
+      organization_status: ['unclaimed', 'active', 'suspended', 'closed', 'cancelled'],
     },
   },
   planning: {

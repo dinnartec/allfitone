@@ -14,6 +14,7 @@ export interface BackofficeFixture {
   resultContracts?: ResultContractFixture
   catalogue?: CatalogueFixture
   support?: SupportFixture
+  supportPayments?: SupportPaymentsFixture
   diagnosis?: DiagnosisFixture
   scopes?: ScopeFixture
   accessLog?: AccessLogFixture
@@ -21,6 +22,7 @@ export interface BackofficeFixture {
   organizationDirectory?: OrganizationDirectoryFixture
   organizationHandover?: OrganizationHandoverFixture
   organizationFiles?: OrganizationFileFixture
+  guestQuota?: { refusal?: { status: number; code: string } }
   teamInvitations?: TeamInvitationFixture
   clientInvitations?: ClientInvitationFixture
   accountRecovery?: AccountRecoveryFixture
@@ -100,8 +102,56 @@ export function scopeDefinition(
  * permissive than the real command would let the screen pass while production
  * refused — which is the whole failure this file exists to prevent.
  */
+export interface BreakGlassReviewFixture {
+  request_id: string
+  case_reference: string
+  purpose: string
+  categories: string[]
+  sensitivity_tier: string
+  requester_person_id: string
+  subject_person_id: string
+  exercise_count: number
+  first_exercised_at: string | null
+  review_due_at: string | null
+  overdue: boolean
+  reviewed_at: string | null
+  reviewed_by_person_id: string | null
+  review_outcome: string | null
+  reviewed_late: boolean | null
+}
+
+/** Hours back from now, so a fixture is overdue because of its age and not a date. */
+export function reviewRecord(
+  caseReference: string,
+  hoursAgo: number,
+  overrides: Partial<BreakGlassReviewFixture> = {},
+): BreakGlassReviewFixture {
+  const used = new Date(Date.now() - hoursAgo * 3_600_000)
+  return {
+    request_id: `019c2000-0000-7000-8000-0000000003${String(hoursAgo).padStart(2, '0')}`,
+    case_reference: caseReference,
+    purpose: 'customer_support_request',
+    categories: ['prior_training_history'],
+    sensitivity_tier: 'standard',
+    requester_person_id: '019c2000-0000-7000-8000-000000000003',
+    subject_person_id: '019c2000-0000-7000-8000-000000000006',
+    exercise_count: 2,
+    first_exercised_at: used.toISOString(),
+    review_due_at: new Date(used.getTime() + 24 * 3_600_000).toISOString(),
+    overdue: hoursAgo > 24,
+    reviewed_at: null,
+    reviewed_by_person_id: null,
+    review_outcome: null,
+    reviewed_late: null,
+    ...overrides,
+  }
+}
+
 export interface BreakGlassFixture {
   refusal?: { status: number; code: string }
+  /** The cases that were exercised and still owe a review. */
+  reviews?: BreakGlassReviewFixture[]
+  reviewRefusal?: { status: number; code: string }
   nextCommandFailure?: { status: number; code: string } | undefined
   /**
    * The reason the next exercise is denied, consumed once. It stands for the real
@@ -388,7 +438,8 @@ export interface OrganizationDirectoryFixture {
   organizations: DirectoryOrganizationFixture[]
 }
 
-export type DirectoryOrganizationStatus = 'unclaimed' | 'active' | 'closed' | 'cancelled'
+export type DirectoryOrganizationStatus =
+  'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
 
 export interface DirectoryOrganizationFixture {
   organization_id: string
@@ -441,6 +492,7 @@ export function directoryOrganization(
  */
 export interface OrganizationFileFixture {
   refusal?: { status: number; code: string }
+  suspensionRefusal?: { status: number; code: string }
   files: OrganizationFileRecordFixture[]
 }
 
@@ -450,7 +502,7 @@ export interface OrganizationFileRecordFixture {
     display_name: string
     type_code: 'professional_practice' | 'gym' | 'studio'
     type_name: string
-    status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+    status: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
     party_kind: 'natural_person' | 'legal_entity'
     legal_name: string | null
     created_at: string
@@ -475,9 +527,96 @@ export interface OrganizationFileRecordFixture {
   }>
   people_served: number
   relationship_counts: { active: number; terminated: number }
-  plans_availability: 'not_modelled'
-  payment_method_availability: 'not_modelled'
-  premium_availability: 'not_modelled'
+  plans: Array<{
+    plan_id: string
+    name: string
+    version_id: string
+    version_number: number
+    amount_minor: number
+    currency_code: string
+    billing_period: 'month' | 'year'
+    subscribers: number
+  }>
+  payment_method: { connected: boolean; provider: string | null; connected_at: string | null }
+  premium: {
+    gives_pro: boolean
+    reason: 'no_published_pro_version' | 'organization_not_active' | null
+  }
+  guest_quota: GuestQuotaFixture
+  suspension: SuspensionFixture
+}
+
+export interface GuestQuotaFixture {
+  organization_id: string
+  seats: number | null
+  occupied: number
+  relationships_active: number
+  invitations_pending: number
+  places_left: number | null
+  over_quota: boolean
+  last_change: {
+    at: string
+    by_person_id: string
+    by_duty_assignment_id: string
+    previous_seats: number | null
+  } | null
+}
+
+/** A gym nobody has sold a number to: no limit, and no decision behind it. */
+export interface SuspensionPeriodFixture {
+  suspension_id: string
+  reason_code: string
+  started_at: string
+  started_by_person_id: string
+  ended_at: string | null
+  ended_by_person_id: string | null
+}
+
+export interface SuspensionFixture {
+  organization_id: string
+  status: string
+  suspended: boolean
+  suspended_at: string | null
+  current: {
+    suspension_id: string
+    reason_code: string
+    started_at: string
+    started_by_person_id: string
+    people_blocked: number
+  } | null
+  history: SuspensionPeriodFixture[]
+}
+
+export function suspensionRecord(
+  organizationId: string,
+  overrides: Partial<SuspensionFixture> = {},
+): SuspensionFixture {
+  return {
+    organization_id: organizationId,
+    status: 'active',
+    suspended: false,
+    suspended_at: null,
+    current: null,
+    history: [],
+    ...overrides,
+  }
+}
+
+export function guestQuotaRecord(
+  organizationId: string,
+  overrides: Partial<GuestQuotaFixture> = {},
+): GuestQuotaFixture {
+  return {
+    organization_id: organizationId,
+    seats: null,
+    occupied: 3,
+    relationships_active: 2,
+    invitations_pending: 1,
+    places_left: null,
+    over_quota: false,
+    last_change: null,
+    ...overrides,
+  }
 }
 
 let fileSequence = 0
@@ -507,9 +646,26 @@ export function organizationFileRecord(
     sites: [],
     people_served: 3,
     relationship_counts: { active: 3, terminated: 1 },
-    plans_availability: 'not_modelled',
-    payment_method_availability: 'not_modelled',
-    premium_availability: 'not_modelled',
+    plans: [
+      {
+        plan_id: `019a9300-0000-7000-8000-${suffix}`,
+        name: 'Mensual',
+        version_id: `019a9400-0000-7000-8000-${suffix}`,
+        version_number: 1,
+        amount_minor: 12000000,
+        currency_code: 'COP',
+        billing_period: 'month',
+        subscribers: 2,
+      },
+    ],
+    payment_method: {
+      connected: true,
+      provider: 'mercado_pago',
+      connected_at: '2026-06-02T12:00:00.000Z',
+    },
+    premium: { gives_pro: true, reason: null },
+    guest_quota: guestQuotaRecord(`019a9200-0000-7000-8000-${suffix}`),
+    suspension: suspensionRecord(`019a9200-0000-7000-8000-${suffix}`),
     ...overrides,
   }
 }
@@ -540,7 +696,7 @@ export interface HandoverRecordFixture {
   type_name: string
   party_kind: 'natural_person' | 'legal_entity'
   legal_name: string | null
-  status: 'unclaimed' | 'active' | 'closed' | 'cancelled'
+  status: 'unclaimed' | 'active' | 'suspended' | 'closed' | 'cancelled'
   created_at: string
   claimed_at: string | null
   cancelled_at: string | null
@@ -785,13 +941,25 @@ export interface BusinessMetricFixture {
   period: { kind: 'total' | 'week' | 'month'; from: string | null; to: string }
 }
 
+export interface BusinessMoneyFixture {
+  key: 'billed_this_month'
+  availability: 'available' | 'below_threshold' | 'not_modelled'
+  amounts: Array<{ currency_code: string; amount_minor: number }> | null
+  reason: string | null
+  period: { kind: 'month'; from: string | null; to: string }
+}
+
 export interface BusinessPanelFixture {
   generated_at: string
   minimum_aggregate: number
   metrics: BusinessMetricFixture[]
+  money: BusinessMoneyFixture[]
 }
 
-/** One of each answer: a figure, a true zero, a group too small, and four gaps. */
+/**
+ * One of each answer: a figure, a true zero, a group too small, one gap that is still a
+ * gap, and the money apart from the counts in two currencies.
+ */
 export function businessPanelRecord(
   overrides: Partial<BusinessPanelFixture> = {},
 ): BusinessPanelFixture {
@@ -851,24 +1019,71 @@ export function businessPanelRecord(
       },
       {
         key: 'active_subscriptions',
-        availability: 'not_modelled',
-        value: null,
-        reason: 'payments_not_modelled',
+        availability: 'available',
+        value: 6,
+        reason: null,
         period: total,
       },
       {
-        key: 'billed_this_month',
-        availability: 'not_modelled',
+        key: 'suspended_subscriptions',
+        availability: 'available',
+        value: 2,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'lapsed_subscriptions',
+        availability: 'available',
+        value: 1,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'open_subscriptions',
+        availability: 'available',
+        value: 9,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'active_organization_subscriptions',
+        availability: 'available',
+        value: 5,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'pro_people_paying_allfit',
+        availability: 'available',
+        value: 6,
+        reason: null,
+        period: total,
+      },
+      {
+        key: 'pro_people_through_organization',
+        availability: 'below_threshold',
         value: null,
-        reason: 'payments_not_modelled',
-        period: { kind: 'month', from: month, to },
+        reason: null,
+        period: total,
       },
       {
         key: 'premium_people',
-        availability: 'not_modelled',
-        value: null,
-        reason: 'payments_not_modelled',
+        availability: 'available',
+        value: 9,
+        reason: null,
         period: total,
+      },
+    ],
+    money: [
+      {
+        key: 'billed_this_month',
+        availability: 'available',
+        amounts: [
+          { currency_code: 'COP', amount_minor: 7960000 },
+          { currency_code: 'USD', amount_minor: 1198 },
+        ],
+        reason: null,
+        period: { kind: 'month', from: month, to },
       },
     ],
     ...overrides,
@@ -888,7 +1103,15 @@ type NoticeAvailability = 'available' | 'withheld'
 
 export interface AttentionPanelFixture {
   generated_at: string
-  billing: { availability: 'not_modelled' }
+  billing: {
+    availability: NoticeAvailability
+    window_hours: 24
+    failed_platform_charges: number | null
+    platform_subscriptions_in_grace: number | null
+    platform_subscriptions_suspended: number | null
+    organization_subscriptions_suspended: number | null
+    failed_organization_charges_availability: 'not_modelled' | null
+  }
   credential_verifications: {
     availability: NoticeAvailability
     pending_count: number | null
@@ -928,7 +1151,15 @@ export function attentionPanelRecord(
 ): AttentionPanelFixture {
   return {
     generated_at: new Date().toISOString(),
-    billing: { availability: 'not_modelled' },
+    billing: {
+      availability: 'available',
+      window_hours: 24,
+      failed_platform_charges: 2,
+      platform_subscriptions_in_grace: 1,
+      platform_subscriptions_suspended: 0,
+      organization_subscriptions_suspended: 3,
+      failed_organization_charges_availability: 'not_modelled',
+    },
     credential_verifications: {
       availability: 'withheld',
       pending_count: null,
@@ -1038,6 +1269,122 @@ export function diagnosisCircuit(
 export interface SupportFixture {
   refusal?: { status: number; code: string }
   people: SupportPersonFixture[]
+}
+
+/**
+ * What a person pays. Its own fixture because it is its own duty: an operator who
+ * opens the card may still be refused here, and that refusal is the common case
+ * rather than an error.
+ */
+export interface SupportPaymentsFixture {
+  refusal?: { status: number; code: string }
+  payments?: PersonPaymentsFixture
+}
+
+export interface PersonPaymentsFixture {
+  person_id: string
+  generated_at: string
+  pro: {
+    source: 'subscription' | 'organization' | 'free'
+    subscription: {
+      plan_name: string
+      version_number: number
+      amount_minor: number
+      currency_code: string | null
+      billing_period: 'month' | 'year' | null
+      store: 'app_store' | 'google_play'
+      status: 'active' | 'grace' | 'suspended' | 'ended'
+      auto_renews: boolean
+      started_at: string
+      current_period_end: string
+      grace_until: string | null
+      suspended_at: string | null
+      ended_at: string | null
+      ended_reason: 'expired' | 'refunded' | 'revoked' | 'replaced' | null
+    } | null
+    organizations: Array<{ organization_id: string; organization_name: string }>
+  }
+  payments: Array<{
+    occurred_at: string
+    store: 'app_store' | 'google_play'
+    result: 'succeeded' | 'failed'
+    failure_code: string | null
+    amount_minor: number | null
+    currency_code: string | null
+  }>
+  payments_truncated: boolean
+  organization_subscriptions: Array<{
+    subscription_id: string
+    organization_id: string
+    organization_name: string
+    status: 'active' | 'suspended' | 'ended'
+    started_at: string
+    suspended_at: string | null
+    ended_at: string | null
+  }>
+  organization_charges_availability: 'not_modelled'
+}
+
+/** One of each: a live subscription, a charge that worked and one that did not. */
+export function personPaymentsRecord(
+  overrides: Partial<PersonPaymentsFixture> = {},
+): PersonPaymentsFixture {
+  return {
+    person_id: '019a9000-0000-7000-8000-000000000005',
+    generated_at: new Date().toISOString(),
+    pro: {
+      source: 'subscription',
+      subscription: {
+        plan_name: 'Pro',
+        version_number: 1,
+        amount_minor: 1990000,
+        currency_code: 'COP',
+        billing_period: 'month',
+        store: 'app_store',
+        status: 'active',
+        auto_renews: true,
+        started_at: '2026-08-14T12:00:00.000Z',
+        current_period_end: '2026-11-14T12:00:00.000Z',
+        grace_until: null,
+        suspended_at: null,
+        ended_at: null,
+        ended_reason: null,
+      },
+      organizations: [],
+    },
+    payments: [
+      {
+        occurred_at: '2026-10-14T12:00:00.000Z',
+        store: 'app_store',
+        result: 'succeeded',
+        failure_code: null,
+        amount_minor: 1990000,
+        currency_code: 'COP',
+      },
+      {
+        occurred_at: '2026-10-13T12:00:00.000Z',
+        store: 'app_store',
+        result: 'failed',
+        failure_code: 'billing_retry',
+        amount_minor: 1990000,
+        currency_code: 'COP',
+      },
+    ],
+    payments_truncated: false,
+    organization_subscriptions: [
+      {
+        subscription_id: '019a9000-0000-7000-8000-000000000071',
+        organization_id: '019a9000-0000-7000-8000-000000000072',
+        organization_name: 'Gimnasio Pagos',
+        status: 'active',
+        started_at: '2026-09-01T12:00:00.000Z',
+        suspended_at: null,
+        ended_at: null,
+      },
+    ],
+    organization_charges_availability: 'not_modelled',
+    ...overrides,
+  }
 }
 
 export interface SupportPersonFixture {
@@ -1388,6 +1735,17 @@ export async function mockBackofficeApi(
       )
     ) {
       await routeClientInvitations(route, request, fixture)
+      return
+    }
+    if (
+      request.method === 'POST' &&
+      /^\/backoffice\/v1\/organizations\/[^/]+\/guest-quota$/.test(request.path)
+    ) {
+      await routeGuestQuota(route, request, fixture)
+      return
+    }
+    if (request.method === 'POST' && SUSPENSION_PATH.test(request.path)) {
+      await routeSuspension(route, request, fixture)
       return
     }
     if (request.method === 'GET' && /^\/backoffice\/v1\/organizations\/[^/]+$/.test(request.path)) {
@@ -1778,10 +2136,46 @@ async function routeBreakGlass(
   }
   const segments = request.path.split('/').filter(Boolean)
 
+  if (request.method === 'GET' && segments[3] === 'reviews') {
+    const queue = [...(glass.reviews ?? [])].sort((left, right) =>
+      (left.first_exercised_at ?? '').localeCompare(right.first_exercised_at ?? ''),
+    )
+    await fulfill(route, 200, { items: queue })
+    return
+  }
+
   if (request.method === 'GET') {
     const status = new URLSearchParams(request.query).get('status')
     const rows = status ? glass.files.filter((file) => file.status === status) : glass.files
     await fulfill(route, 200, { items: rows.map((file) => breakGlassProjection(file)) })
+    return
+  }
+
+  if (segments[5] === 'review') {
+    if (glass.reviewRefusal) {
+      await fulfillProblem(route, glass.reviewRefusal.status, glass.reviewRefusal.code)
+      return
+    }
+    const entry = (glass.reviews ?? []).find((row) => row.request_id === segments[4])
+    if (!entry) {
+      await fulfillProblem(route, 404, 'not-found')
+      return
+    }
+    if (entry.reviewed_at !== null) {
+      await fulfillProblem(route, 409, 'conflict')
+      return
+    }
+    const outcome = (request.body as { outcome?: string } | undefined)?.outcome
+    entry.reviewed_at = new Date().toISOString()
+    entry.reviewed_by_person_id = '019c2000-0000-7000-8000-000000000005'
+    entry.review_outcome = outcome ?? 'justified'
+    // Late is decided by the deadline, not by the queue flag: a case stops being
+    // overdue the moment it is answered and stays late for good.
+    entry.reviewed_late =
+      entry.review_due_at !== null &&
+      Date.parse(entry.reviewed_at) > Date.parse(entry.review_due_at)
+    entry.overdue = false
+    await fulfill(route, 200, entry)
     return
   }
 
@@ -2596,6 +2990,113 @@ async function routeOrganizationFile(
   await fulfill(route, 200, record)
 }
 
+const SUSPENSION_PATH = new RegExp('^/backoffice/v1/organizations/[^/]+/(suspension|reactivation)$')
+
+/**
+ * Suspending writes one cause per person the gym is serving, so the figure is derived
+ * from the file rather than invented: a fixture that disagreed with the relationship
+ * count would let the screen pass while showing a number it never got.
+ */
+async function routeSuspension(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const segments = request.path.split('/').filter(Boolean)
+  const files = fixture.organizationFiles ?? { files: [] }
+  const record = files.files.find((file) => file.organization.organization_id === segments[3])
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+  if (files.suspensionRefusal) {
+    await fulfillProblem(route, files.suspensionRefusal.status, files.suspensionRefusal.code)
+    return
+  }
+
+  if (segments[4] === 'suspension') {
+    const reason = (request.body as { reason_code?: string } | undefined)?.reason_code
+    const startedAt = new Date().toISOString()
+    record.suspension = {
+      ...record.suspension,
+      status: 'suspended',
+      suspended: true,
+      suspended_at: startedAt,
+      current: {
+        suspension_id: '019a9200-0000-7000-8000-000000000801',
+        reason_code: reason ?? 'nonpayment',
+        started_at: startedAt,
+        started_by_person_id: '019a9200-0000-7000-8000-000000000003',
+        people_blocked: record.relationship_counts.active,
+      },
+    }
+    record.organization.status = 'suspended'
+  } else {
+    const open = record.suspension.current
+    record.suspension = {
+      ...record.suspension,
+      status: 'active',
+      suspended: false,
+      suspended_at: null,
+      current: null,
+      history: open
+        ? [
+            {
+              suspension_id: open.suspension_id,
+              reason_code: open.reason_code,
+              started_at: open.started_at,
+              started_by_person_id: open.started_by_person_id,
+              ended_at: new Date().toISOString(),
+              ended_by_person_id: '019a9200-0000-7000-8000-000000000003',
+            },
+            ...record.suspension.history,
+          ]
+        : record.suspension.history,
+    }
+    record.organization.status = 'active'
+  }
+  await fulfill(route, 200, record.suspension)
+}
+
+async function routeGuestQuota(
+  route: Route,
+  request: MockRequest,
+  fixture: BackofficeFixture,
+): Promise<void> {
+  const state = fixture.guestQuota ?? {}
+  fixture.guestQuota = state
+  if (state.refusal) {
+    await fulfillProblem(route, state.refusal.status, state.refusal.code)
+    return
+  }
+
+  const organizationId = request.path.split('/').filter(Boolean)[3] ?? ''
+  const files = fixture.organizationFiles ?? { files: [] }
+  const record = files.files.find((file) => file.organization.organization_id === organizationId)
+  if (!record) {
+    await fulfillProblem(route, 404, 'not-found')
+    return
+  }
+
+  const body = (request.body ?? {}) as { seats?: number | null }
+  const seats = body.seats === undefined ? null : body.seats
+  const quota = record.guest_quota
+  const next: GuestQuotaFixture = {
+    ...quota,
+    seats,
+    places_left: seats === null ? null : Math.max(seats - quota.occupied, 0),
+    over_quota: seats !== null && quota.occupied > seats,
+    last_change: {
+      at: '2026-10-15T15:00:00.000Z',
+      by_person_id: '019a9000-0000-7000-8000-000000000003',
+      by_duty_assignment_id: '019a9000-0000-7000-8000-000000000703',
+      previous_seats: quota.seats,
+    },
+  }
+  record.guest_quota = next
+  await fulfill(route, 200, next)
+}
+
 async function routeTeamInvitations(
   route: Route,
   request: MockRequest,
@@ -3287,6 +3788,16 @@ async function routeSupport(
   }
 
   const segments = request.path.split('/').filter(Boolean)
+  if (segments.length === 6 && segments[5] === 'payments') {
+    const billing = fixture.supportPayments ?? {}
+    if (billing.refusal) {
+      await fulfillProblem(route, billing.refusal.status, billing.refusal.code)
+      return
+    }
+    await fulfill(route, 200, billing.payments ?? personPaymentsRecord())
+    return
+  }
+
   if (segments.length === 5) {
     const found = support.people.find((person) => person.person_id === segments[4])
     if (!found) {
