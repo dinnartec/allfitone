@@ -62,6 +62,27 @@ const detail: ProgramDetail = {
   goals: ['build_muscle'],
   levels: ['some_practice', 'experienced'],
   emphases: ['back', 'chest', 'legs'],
+  nutrition: {
+    goal_code: 'build_muscle',
+    targets: [
+      {
+        nutrient_code: 'energy',
+        mode: 'range',
+        minimum: 2800,
+        maximum: 3100,
+        exact: null,
+        unit: 'kcal',
+      },
+      {
+        nutrient_code: 'protein',
+        mode: 'exact',
+        minimum: null,
+        maximum: null,
+        exact: 160,
+        unit: 'g',
+      },
+    ],
+  },
   days: [
     {
       day: 1,
@@ -478,6 +499,22 @@ describe('GET /space/v1/programs/{programVersionId}', () => {
     assertMatchesContract('SpaceProgramDetail', body)
   })
 
+  test("T-PLN-API-170 carries the programme's nutrition goal, or null without one", async () => {
+    const response = await harness().request(`/space/v1/programs/${VERSION_ID}`, {
+      headers: authorized,
+    })
+    const body = (await response.json()) as ProgramDetail
+    expect(body.nutrition?.goal_code).toBe('build_muscle')
+    assertMatchesContract('SpaceProgramDetail', body)
+
+    const none = await harness({
+      service: { readProgram: async () => ({ ...detail, nutrition: null }) },
+    }).request(`/space/v1/programs/${VERSION_ID}`, { headers: authorized })
+    const empty = (await none.json()) as ProgramDetail
+    expect(empty.nutrition).toBeNull()
+    assertMatchesContract('SpaceProgramDetail', empty)
+  })
+
   test('T-PLN-API-167 draws a programme with no artwork rather than refusing it', async () => {
     const bare = harness({
       service: {
@@ -880,6 +917,47 @@ describe('POST /space/v1/assignments', () => {
       starts_on: '2020-01-01',
     })
 
+    expect(response.status).toBe(400)
+  })
+
+  test("T-PLN-API-171 passes the choice to adopt the programme's goal, false by default", async () => {
+    const seen: boolean[] = []
+    const app = harness({
+      service: {
+        chooseProgram: async (input) => {
+          seen.push(input.adoptNutrition)
+          return assignment
+        },
+      },
+    })
+    const send = (body: unknown) =>
+      app.request('/space/v1/assignments', {
+        method: 'POST',
+        headers: commanded,
+        body: JSON.stringify(body),
+      })
+
+    expect(
+      (
+        await send({
+          program_version_id: VERSION_ID,
+          timezone: 'America/Bogota',
+          adopt_nutrition: true,
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (await send({ program_version_id: VERSION_ID, timezone: 'America/Bogota' })).status,
+    ).toBe(200)
+    expect(seen).toEqual([true, false])
+  })
+
+  test('T-PLN-API-172 refuses an adopt_nutrition that is not a boolean', async () => {
+    const response = await choose({
+      program_version_id: VERSION_ID,
+      timezone: 'America/Bogota',
+      adopt_nutrition: 'yes',
+    })
     expect(response.status).toBe(400)
   })
 

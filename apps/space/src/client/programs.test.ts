@@ -71,7 +71,11 @@ describe('choose', () => {
     const { flow } = harness()
 
     await expect(
-      flow.choose({ program_version_id: VERSION_ID, timezone: 'America/Bogota' }),
+      flow.choose({
+        program_version_id: VERSION_ID,
+        timezone: 'America/Bogota',
+        adopt_nutrition: false,
+      }),
     ).resolves.toEqual(assignment)
   })
 
@@ -87,7 +91,11 @@ describe('choose', () => {
       },
     })
 
-    const choice = { program_version_id: VERSION_ID, timezone: 'America/Bogota' }
+    const choice = {
+      program_version_id: VERSION_ID,
+      timezone: 'America/Bogota',
+      adopt_nutrition: false,
+    }
     await expect(flow.choose(choice)).rejects.toThrow('lost response')
     await flow.choose(choice)
 
@@ -98,8 +106,16 @@ describe('choose', () => {
   test('gives a different card its own key, because it is a different intention', async () => {
     const { flow, chosen } = harness()
 
-    await flow.choose({ program_version_id: VERSION_ID, timezone: 'America/Bogota' })
-    await flow.choose({ program_version_id: OTHER_VERSION_ID, timezone: 'America/Bogota' })
+    await flow.choose({
+      program_version_id: VERSION_ID,
+      timezone: 'America/Bogota',
+      adopt_nutrition: false,
+    })
+    await flow.choose({
+      program_version_id: OTHER_VERSION_ID,
+      timezone: 'America/Bogota',
+      adopt_nutrition: false,
+    })
 
     expect(chosen).toHaveLength(2)
     expect(chosen[0]?.key).not.toBe(chosen[1]?.key)
@@ -107,7 +123,11 @@ describe('choose', () => {
 
   test('releases the key once the choice succeeded', async () => {
     const { flow, chosen } = harness()
-    const choice = { program_version_id: VERSION_ID, timezone: 'America/Bogota' }
+    const choice = {
+      program_version_id: VERSION_ID,
+      timezone: 'America/Bogota',
+      adopt_nutrition: false,
+    }
 
     await flow.choose(choice)
     await flow.choose(choice)

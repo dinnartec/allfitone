@@ -6032,6 +6032,8 @@ export interface components {
     SpaceProgramDetail: {
       program_version_id: components['schemas']['UuidV7']
       title: string
+      /** @description The nutrition goal an Allfit programme brings, sized to the person's latest weight. Null for a programme the person owns, with no weight recorded, or with no reference for its goal. */
+      nutrition: components['schemas']['SpaceProgramNutrition'] | null
       /** @description What the program is, in the words somebody deciding needs. */
       notes: string | null
       /** @description How long the program lasts. Null when it has no end date: its composition repeats instead of running out, and the days below are the week it repeats. */
@@ -6082,8 +6084,17 @@ export interface components {
      * @enum {string}
      */
     SetKind: 'normal' | 'warmup' | 'to_failure' | 'drop'
+    SpaceProgramNutrition: {
+      goal_code: components['schemas']['PrimaryTrainingGoal']
+      targets: components['schemas']['NutritionGoalTarget'][]
+    }
     SpaceProgramChoice: {
       program_version_id: components['schemas']['UuidV7']
+      /**
+       * @description Also publish the programme's nutrition goal as the person's own (OP-NUT-007), in the same command. Ignored when the programme has none for this person.
+       * @default false
+       */
+      adopt_nutrition: boolean
       /** @description An IANA zone. The start date is **not** sent: it is always today in this zone, and a client-supplied date could backdate a plan into a history that never happened. */
       timezone: string
     }

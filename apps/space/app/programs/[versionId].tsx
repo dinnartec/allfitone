@@ -45,7 +45,7 @@ import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Image } from 'expo-image'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ApiError } from '../../src/client'
@@ -58,6 +58,8 @@ import { FROM_PROGRAM } from '../../src/client/exercise-pick'
 import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { ZONE_LABEL } from '../../src/components/program-card'
 import { DayCard, ExerciseCard, Figure } from '../../src/components/program-detail'
+import { programNutritionCopy } from '../../src/client/program-nutrition'
+import { ProgramNutritionCard } from '../../src/components/program-nutrition-card'
 
 /** Lo que ocupa la fotografía del programa. La del lienzo, sobre un alto de 844. */
 const HERO = 252
@@ -81,6 +83,7 @@ export default function ProgramVersion() {
   /** La demostración de cada movimiento, por identificador. Del catálogo, no del programa. */
   const [previews, setPreviews] = useState<ReadonlyMap<string, string | null>>(new Map())
   const [choosing, setChoosing] = useState(false)
+  const [adoptNutrition, setAdoptNutrition] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
@@ -127,6 +130,7 @@ export default function ProgramVersion() {
       await flow.choose({
         program_version_id: detail.program_version_id,
         timezone: deviceTimezone(),
+        adopt_nutrition: detail.nutrition !== null && adoptNutrition,
       })
       router.replace('/today')
     } catch (cause: unknown) {
@@ -141,12 +145,18 @@ export default function ProgramVersion() {
     }
   }
 
+  const nutrition = detail?.nutrition
+    ? programNutritionCopy(detail.nutrition, detail.days_per_week)
+    : null
   const days = detail?.days ?? []
   const shown = days[Math.min(openDay, Math.max(0, days.length - 1))]
 
   return (
     <Screen edges={[]} style={styles.bare}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, nutrition ? styles.contentWithAdopt : null]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* La fotografía llega hasta el borde superior, así que la pantalla no reserva
             área segura y el héroe paga la suya: el botón de volver cae bajo la hora. */}
         <View style={[styles.hero, { height: HERO }]}>
@@ -204,6 +214,12 @@ export default function ProgramVersion() {
                 <Badge key={zone} label={ZONE_LABEL[zone] ?? zone} variant="quiet" />
               ))}
             </View>
+
+            {nutrition ? (
+              <View style={styles.gutter}>
+                <ProgramNutritionCard copy={nutrition} />
+              </View>
+            ) : null}
 
             <View style={[styles.sectionHead, styles.gutter]}>
               <Text role="eyebrow" size="2xs" color="muted">
@@ -307,6 +323,37 @@ export default function ProgramVersion() {
       {detail ? (
         <View style={[styles.footer, { backgroundColor: theme.color.background.canvas }]}>
           <View style={[styles.hairline, { backgroundColor: theme.color.border.subtle }]} />
+          {/* Encendido por defecto: quien elige un programa suele querer comer para él, y
+              apagarlo es un toque. Adoptar reemplaza la meta; la anterior queda en el historial. */}
+          {nutrition ? (
+            <View
+              style={[
+                styles.adopt,
+                {
+                  backgroundColor: theme.color.background.surface,
+                  borderColor: theme.color.border.subtle,
+                },
+              ]}
+            >
+              <View style={styles.adoptText}>
+                <Text role="control" size="sm">
+                  Usar también su meta de nutrición
+                </Text>
+                <Text role="body" size="xs" color="muted">
+                  Reemplaza tu meta actual; la anterior queda en el historial
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel="Usar también su meta de nutrición"
+                value={adoptNutrition}
+                onValueChange={setAdoptNutrition}
+                trackColor={{
+                  true: theme.color.icon.accent,
+                  false: theme.color.background.surfaceMuted,
+                }}
+              />
+            </View>
+          ) : null}
           <Button
             label="Tomar este programa"
             icon="check"
@@ -369,4 +416,16 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     gap: 10,
   },
+  adopt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  adoptText: { flex: 1, gap: 2 },
+  // The footer grows by the switch; the list ends above it, not under it.
+  contentWithAdopt: { paddingBottom: 270 },
 })

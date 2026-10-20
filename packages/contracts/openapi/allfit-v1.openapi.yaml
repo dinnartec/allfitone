@@ -15662,12 +15662,20 @@ components:
       additionalProperties: false
       required:
         [program_version_id, title, notes, weeks, days_per_week, sex_affinity, goals, levels,
-         emphases, days, cover_url]
+         emphases, days, cover_url, nutrition]
       properties:
         program_version_id:
           $ref: '#/components/schemas/UuidV7'
         title:
           type: string
+        nutrition:
+          oneOf:
+            - $ref: '#/components/schemas/SpaceProgramNutrition'
+            - type: 'null'
+          description: >-
+            The nutrition goal an Allfit programme brings, sized to the person's latest
+            weight. Null for a programme the person owns, with no weight recorded, or with
+            no reference for its goal.
         notes:
           oneOf:
             - type: string
@@ -15815,6 +15823,19 @@ components:
       description: >-
         What a set is: `planning.set_kind`, shared by the plan and by what was done
         (ADR-030, ADR-033). A warmup is recorded but never counted as work.
+    SpaceProgramNutrition:
+      type: object
+      additionalProperties: false
+      required: [goal_code, targets]
+      properties:
+        goal_code:
+          $ref: '#/components/schemas/PrimaryTrainingGoal'
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/NutritionGoalTarget'
     SpaceProgramChoice:
       type: object
       additionalProperties: false
@@ -15822,6 +15843,12 @@ components:
       properties:
         program_version_id:
           $ref: '#/components/schemas/UuidV7'
+        adopt_nutrition:
+          type: boolean
+          default: false
+          description: >-
+            Also publish the programme's nutrition goal as the person's own (OP-NUT-007),
+            in the same command. Ignored when the programme has none for this person.
         timezone:
           type: string
           minLength: 1

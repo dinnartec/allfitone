@@ -86,6 +86,7 @@ export interface SpacePlanningService {
     personId: string
     programVersionId: string
     timezone: string
+    adoptNutrition: boolean
     idempotencyKey: string
     commandId: string
     requestHash: Buffer
@@ -195,6 +196,8 @@ export function createSpacePlanningService(
           personId: input.personId,
           programVersionId: version.id,
           timezone: input.timezone,
+          // A programme of the person's own has no reference goal to adopt.
+          adoptNutrition: false,
           idempotencyKey: input.idempotencyKey,
           commandId: input.commandId,
           requestHash: input.requestHash,
