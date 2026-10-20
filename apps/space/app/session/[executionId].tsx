@@ -84,6 +84,7 @@ import {
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import type { FinishedExecution } from '../../src/client/execution'
 import { createSpaceExecutionFlow } from '../../src/client/execution-transport'
+import { FREE_SESSION_TITLE, sessionHeading } from '../../src/client/free-training'
 import {
   changesBetween,
   clockOf,
@@ -248,6 +249,8 @@ export default function Session() {
   /** By key, not place: a move renumbers every place, and the open one has to stay open. */
   const [openKey, setOpenKey] = useState<string | undefined>(undefined)
   const [title, setTitle] = useState('')
+  // No title is what a free session is: a planned one always carries its routine's.
+  const [free, setFree] = useState(false)
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [closing, setClosing] = useState(false)
@@ -301,7 +304,8 @@ export default function Session() {
         setPreviews(new Map(movements.map((one) => [one.id, one.demo_url])))
         setCatalogue({ movements, muscles: library?.muscles ?? [] })
         revision.current = current.revision_number
-        setTitle(current.title ?? 'Sesión')
+        setTitle(current.title ?? FREE_SESSION_TITLE)
+        setFree(current.title === null)
         const names = new Map(movements.map((one) => [one.id, one.name]))
         // A past session opens with what it recorded; there is no clock to run.
         const opened = read ? editStateFrom(current, names) : workingStateFrom(current, { names })
@@ -641,6 +645,7 @@ export default function Session() {
 
   const progress = setsProgress(exercises)
   const trains = musclesLine(exercises, catalogue.movements, catalogue.muscles)
+  const line = sessionHeading(free ? null : title, trains).line
   const volume = totalVolumeKg(exercises)
   const recorded = canFinish(exercises)
 
@@ -663,9 +668,9 @@ export default function Session() {
             </Text>
           ) : null}
           {/* Recomputed from the list, so it follows an exercise added, moved or taken out. */}
-          {trains && !editing ? (
+          {line && !editing ? (
             <Text role="body" size="sm" color="muted" numberOfLines={1}>
-              {trains}
+              {line}
             </Text>
           ) : null}
         </View>
@@ -830,9 +835,13 @@ export default function Session() {
 
         {/* The routine editor's own picker. What it adds is not written to the plan:
             a set recorded against a movement the plan never had is simply unplanned. */}
-        <View style={styles.addExercise}>
-          <Button label="Añadir ejercicio" icon="add" variant="secondary" onPress={addExercise} />
-        </View>
+        {exercises.length === 0 && !editing && startedAt !== undefined ? (
+          <FirstExercise free={free} onAdd={addExercise} />
+        ) : (
+          <View style={styles.addExercise}>
+            <Button label="Añadir ejercicio" icon="add" variant="secondary" onPress={addExercise} />
+          </View>
+        )}
       </ScrollView>
 
       {editing ? (
@@ -1654,6 +1663,56 @@ function Field({
   )
 }
 
+/**
+ * `LIB-1`: the session before its first exercise, which a free one always starts as.
+ * Adding is the only thing to do, so it is the primary act here and not the quiet
+ * button under a list that does not exist yet.
+ */
+function FirstExercise({ free, onAdd }: { readonly free: boolean; readonly onAdd: () => void }) {
+  const theme = useTheme()
+  return (
+    <View style={styles.first}>
+      <View
+        style={[
+          styles.firstCard,
+          {
+            backgroundColor: theme.color.background.surface,
+            borderColor: theme.color.border.subtle,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.firstGlyph,
+            {
+              backgroundColor: theme.color.accent.tonal,
+              borderColor: theme.color.accent.tonalBorder,
+            },
+          ]}
+        >
+          <FoundationIcon name="freestyle" size="md" color={theme.color.icon.accent} decorative />
+        </View>
+        <Text role="control" size="lg" align="center">
+          Agrega tu primer ejercicio
+        </Text>
+        <Text role="body" size="sm" color="secondary" align="center">
+          Búscalo en la biblioteca y registra cada serie. Puedes sumar más ejercicios cuando
+          quieras.
+        </Text>
+        <Button label="Añadir ejercicio" icon="add" onPress={onAdd} style={styles.firstAdd} />
+      </View>
+      {free ? (
+        <View style={styles.firstNote}>
+          <FoundationIcon name="locked" size="xs" color={theme.color.icon.secondary} decorative />
+          <Text role="body" size="xs" color="muted" style={styles.firstNoteText}>
+            Es tuyo: ningún gimnasio lo ve si no lo compartes.
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   past: { gap: 10, paddingTop: 14 },
@@ -1793,4 +1852,25 @@ const styles = StyleSheet.create({
   finish: { paddingHorizontal: 0, minWidth: 104 },
   decisions: { gap: 10, paddingBottom: 8 },
   addExercise: { gap: 8, paddingTop: 10 },
+  first: { gap: 14, paddingTop: 6 },
+  firstCard: {
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 22,
+    paddingTop: 28,
+    paddingBottom: 22,
+  },
+  firstGlyph: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  firstAdd: { alignSelf: 'stretch', marginTop: 4 },
+  firstNote: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  firstNoteText: { flex: 1 },
 })

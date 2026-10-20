@@ -39,6 +39,8 @@ export type Revised = AllfitV1Schemas['ExecutionRevised']
 export type Invalidated = AllfitV1Schemas['ExecutionInvalidated']
 export type InvalidationPreview = AllfitV1Schemas['SpaceInvalidationPreview']
 export type Repeated = AllfitV1Schemas['ExecutionRepeated']
+export type FreeSession = AllfitV1Schemas['FreeSession']
+export type FreeSessionCreate = AllfitV1Schemas['FreeSessionCreate']
 
 export interface ExecutionTransport {
   readToday(timezone: string): Promise<Today>
@@ -56,6 +58,7 @@ export interface ExecutionTransport {
       capture_source: string
     },
   ): Promise<Attempt>
+  startFreeSession(command: CommandHeaders, start: FreeSessionCreate): Promise<FreeSession>
   saveResults(
     command: CommandHeaders,
     executedSessionId: string,
@@ -95,6 +98,8 @@ export interface ExecutionFlow {
   /** One month's totals and weeks (`OP-EXE-022`), its dates in the device's zone. */
   readHistoryMonth(month: string, timezone: string): Promise<HistoryMonth>
   start(plannedSessionId: string, timezone: string): Promise<string>
+  /** Training off the plan (`OP-EXE-004`): an empty strength session; answers its id. */
+  startFree(timezone: string): Promise<string>
   save(
     executedSessionId: string,
     revisionNumber: number,
@@ -126,6 +131,8 @@ export function createExecutionFlow(dependencies: ExecutionFlowDependencies): Ex
   // Same reason: annulling twice is harmless, opening two repeats is not.
   const annulling = new Map<string, CommandHeaders>()
   const repeating = new Map<string, CommandHeaders>()
+  // The start time travels with the key: the body is hashed, so a retry must send both.
+  let startingFree: { command: CommandHeaders; startedAt: string } | undefined
   const held = (keys: Map<string, CommandHeaders>, id: string) => {
     const found = keys.get(id) ?? dependencies.newCommand()
     keys.set(id, found)
@@ -154,6 +161,19 @@ export function createExecutionFlow(dependencies: ExecutionFlowDependencies): Ex
         capture_source: 'manual',
       })
       starting.delete(plannedSessionId)
+      return started.id
+    },
+
+    async startFree(timezone) {
+      startingFree ??= { command: dependencies.newCommand(), startedAt: new Date().toISOString() }
+      const started = await dependencies.transport.startFreeSession(startingFree.command, {
+        discipline_code: 'strength',
+        started_at: startingFree.startedAt,
+        timezone,
+        requested_level: 'detailed',
+        capture_source: 'manual',
+      })
+      startingFree = undefined
       return started.id
     },
 

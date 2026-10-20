@@ -48,6 +48,15 @@ function harness(overrides: Partial<ExecutionTransport> = {}) {
         revision_number: 0,
       }
     },
+    startFreeSession: async (command) => {
+      sent.keys.push(command.idempotencyKey)
+      return {
+        id: command.commandId,
+        status: 'in_progress',
+        revision_number: 0,
+        result_contract: { id: 'contract', version: 1, requested_level: 'detailed' },
+      }
+    },
     startAttempt: async (command) => {
       sent.keys.push(command.idempotencyKey)
       return {
@@ -96,6 +105,62 @@ function harness(overrides: Partial<ExecutionTransport> = {}) {
 
   return { flow, sent }
 }
+
+describe('starting a free session', () => {
+  test('T-SPC-UNIT-299 starts a strength session under the id the device chose', async () => {
+    let body: Parameters<ExecutionTransport['startFreeSession']>[1] | undefined
+    const { flow } = harness({
+      startFreeSession: async (command, start) => {
+        body = start
+        return {
+          id: command.commandId,
+          status: 'in_progress',
+          revision_number: 0,
+          result_contract: { id: 'contract', version: 1, requested_level: 'detailed' },
+        }
+      },
+    })
+
+    expect(await flow.startFree('America/Bogota')).toBe('command-1')
+    expect(body?.discipline_code).toBe('strength')
+    expect(body?.timezone).toBe('America/Bogota')
+  })
+
+  test('T-SPC-UNIT-300 a retry sends the same command and the same start time', async () => {
+    // The body is hashed with the key: a new `started_at` on the retry would be a
+    // different request under the same key, and the server would refuse it.
+    const sentStarts: string[] = []
+    const used: string[] = []
+    const { flow } = harness({
+      startFreeSession: async (command, start) => {
+        used.push(command.idempotencyKey)
+        sentStarts.push(start.started_at)
+        if (used.length === 1) throw new Error('connection dropped')
+        return {
+          id: command.commandId,
+          status: 'in_progress',
+          revision_number: 0,
+          result_contract: { id: 'contract', version: 1, requested_level: 'detailed' },
+        }
+      },
+    })
+
+    await expect(flow.startFree('America/Bogota')).rejects.toThrow('connection dropped')
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(await flow.startFree('America/Bogota')).toBe('command-1')
+    expect(used).toEqual(['key-1', 'key-1'])
+    expect(sentStarts[1]).toBe(sentStarts[0])
+  })
+
+  test('T-SPC-UNIT-301 once one started, the next free session claims a new key', async () => {
+    const { flow, sent } = harness()
+
+    await flow.startFree('America/Bogota')
+    await flow.startFree('America/Bogota')
+
+    expect(sent.keys).toEqual(['key-1', 'key-2'])
+  })
+})
 
 describe('starting a session', () => {
   test('T-SPC-UNIT-51 answers the session the device named', async () => {

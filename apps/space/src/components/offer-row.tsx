@@ -24,6 +24,7 @@ export function OfferRow({
   label,
   caption,
   tone = 'deep',
+  captionColor = 'muted',
   onPress,
 }: {
   readonly icon: IconName
@@ -31,6 +32,8 @@ export function OfferRow({
   /** Qué pasa al tocarla. Sin esto es un botón, y para eso está el botón. */
   readonly caption: string
   readonly tone?: 'deep' | 'quiet'
+  /** Accent when the caption says something is waiting, not what the row does. */
+  readonly captionColor?: 'muted' | 'accent'
   readonly onPress: () => void
 }) {
   const theme = useTheme()
@@ -55,7 +58,7 @@ export function OfferRow({
         <Text role="control" size="md">
           {label}
         </Text>
-        <Text role="body" size="sm" color="muted">
+        <Text role="body" size="sm" color={captionColor}>
           {caption}
         </Text>
       </View>
