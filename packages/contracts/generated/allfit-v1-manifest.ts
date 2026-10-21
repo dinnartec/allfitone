@@ -615,6 +615,20 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '409', '503'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/client-invitations',
+      operationId: 'listMySpaceClientInvitations',
+      allfitOperation: 'OP-IDN-056',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
+      method: 'GET',
+      path: '/space/v1/client-invitations/{invitationId}',
+      operationId: 'readMySpaceClientInvitation',
+      allfitOperation: 'OP-REL-015',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/client-invitations/decisions',
       operationId: 'decideSpaceClientInvitation',
@@ -1057,6 +1071,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/relationships/{relationshipId}/events',
+      operationId: 'listMyRelationshipEvents',
+      allfitOperation: 'OP-REL-014',
+      responses: ['200', '400', '401', '403', '404', '503'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/relationships/{relationshipId}/substitutions',
       operationId: 'listMyRelationshipSubstitutions',
       allfitOperation: 'OP-REL-013',
@@ -1064,9 +1085,23 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'POST',
+      path: '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/decision',
+      operationId: 'decideMyRelationshipSubstitution',
+      allfitOperation: 'OP-REL-005',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'POST',
       path: '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/termination',
       operationId: 'endMyRelationshipSubstitution',
       allfitOperation: 'OP-REL-006',
+      responses: ['200', '400', '401', '403', '404', '409', '503'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/relationships/{relationshipId}/termination',
+      operationId: 'endMyRelationship',
+      allfitOperation: 'OP-REL-007',
       responses: ['200', '400', '401', '403', '404', '409', '503'],
     },
     {

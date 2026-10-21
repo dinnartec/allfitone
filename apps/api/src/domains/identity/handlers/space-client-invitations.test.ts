@@ -55,6 +55,7 @@ function invitations(overrides: Partial<ClientInvitationService> = {}): ClientIn
         responsibleParty: { party_kind: 'legal_entity', party_name: 'Resolve SAS' },
       },
       expiresAt: new Date('2026-10-06T12:00:00.000Z'),
+      invitedBy: 'Laura Gómez',
       scopeOptions: [
         {
           scopeCode: 'body_progress' as const,
@@ -66,6 +67,19 @@ function invitations(overrides: Partial<ClientInvitationService> = {}): ClientIn
         },
       ],
     }),
+    listMine: async () => [
+      {
+        id: '0199d000-0000-7000-8000-000000000031',
+        intentId: INTENT,
+        organizationId: '0199d000-0000-7000-8000-000000000010',
+        organizationName: 'Resolve Gym',
+        invitedBy: 'Laura Gómez',
+        expiresAt: new Date('2026-10-06T12:00:00.000Z'),
+      },
+    ],
+    readMine: async () => {
+      throw new StudioInvitationError('not-found')
+    },
     decide: async () => ({
       resource: {
         invitationId: '0199d000-0000-7000-8000-000000000031',
@@ -338,5 +352,92 @@ describe('what answering refuses', () => {
     })
     const response = await app(service).fetch(post('decisions', DECISION_BODY))
     expect(response.status).toBe(409)
+  })
+})
+
+const INVITATION = '0199d000-0000-7000-8000-000000000031'
+
+describe('her pending invitations', () => {
+  const get = (path: string, resolver: SpaceIdentityResolver = identity, service = invitations()) =>
+    app(service, resolver).request(`/space/v1/client-invitations${path}`, {
+      headers: { authorization: 'Bearer access-token' },
+    })
+
+  test('T-IDN-CLIENT-SPACE-01 lists the invitations addressed to her verified email', async () => {
+    const response = await get('')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      data: [
+        {
+          id: INVITATION,
+          invitation_intent_id: INTENT,
+          organization_id: '0199d000-0000-7000-8000-000000000010',
+          organization_name: 'Resolve Gym',
+          invited_by: 'Laura Gómez',
+          expires_at: '2026-10-06T12:00:00.000Z',
+        },
+      ],
+    })
+  })
+
+  test('T-IDN-CLIENT-SPACE-02 somebody still registering is told too', async () => {
+    let asked: SpaceInvitationIdentity | undefined
+    const response = await get(
+      '',
+      async () => ({ personId: null, verifiedEmail: 'ana@example.test' }),
+      invitations({
+        listMine: async (who) => {
+          asked = who
+          return []
+        },
+      }),
+    )
+    expect(response.status).toBe(200)
+    expect(asked?.personId).toBeNull()
+  })
+
+  test('T-IDN-CLIENT-SPACE-03 reads one by id, saying who sent it', async () => {
+    const response = await get(
+      `/${INVITATION}`,
+      identity,
+      invitations({
+        readMine: async () =>
+          invitations().resolve(await identity('x'), { token: TOKEN, requestId: 'r' }),
+      }),
+    )
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { invited_by: string }).invited_by).toBe('Laura Gómez')
+  })
+
+  test('T-IDN-CLIENT-SPACE-04 an id that is not hers or no longer open is not found', async () => {
+    expect((await get(`/${INVITATION}`)).status).toBe(404)
+  })
+
+  test('T-IDN-CLIENT-SPACE-05 a malformed id is refused before the database', async () => {
+    expect((await get('/not-an-id')).status).toBe(400)
+  })
+
+  test('T-IDN-CLIENT-SPACE-06 decides one by id instead of the token', async () => {
+    let seen: Record<string, unknown> | undefined
+    const service = invitations({
+      decide: async (_who, input) => {
+        seen = input as unknown as Record<string, unknown>
+        return invitations().decide(_who, input)
+      },
+    })
+    const { token: _token, ...byId } = DECISION_BODY
+    const response = await app(service).fetch(
+      post('decisions', { ...byId, invitation_id: INVITATION }),
+    )
+    expect(response.status).toBe(200)
+    expect(seen?.invitationId).toBe(INVITATION)
+    expect(seen?.token).toBeUndefined()
+  })
+
+  test('T-IDN-CLIENT-SPACE-07 naming both the token and the id is refused', async () => {
+    const response = await app().fetch(
+      post('decisions', { ...DECISION_BODY, invitation_id: INVITATION }),
+    )
+    expect(response.status).toBe(422)
   })
 })

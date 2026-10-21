@@ -2624,10 +2624,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     },
   },
   ClientInvitationDecisionCreate: {
+    description:
+      "The invitation is named by the emailed token or, for one found among the caller's pending invitations, by its id. Exactly one of the two. Either way only the person whose verified email it was addressed to may decide it.",
     type: 'object',
     additionalProperties: false,
-    required: ['token', 'invitation_intent_id', 'relationship_decision'],
+    required: ['invitation_intent_id', 'relationship_decision'],
+    oneOf: [
+      {
+        required: ['token'],
+      },
+      {
+        required: ['invitation_id'],
+      },
+    ],
     properties: {
+      invitation_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
       token: {
         type: 'string',
         minLength: 43,
@@ -2709,6 +2722,55 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     type: 'string',
     enum: ['pending', 'accepted', 'rejected', 'revoked', 'expired'],
   },
+  ClientInvitationPending: {
+    description:
+      "An invitation still waiting for an answer, addressed to the caller's verified email. Enough to say who is waiting and until when; what it asks for is read by id.",
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'id',
+      'invitation_intent_id',
+      'organization_id',
+      'organization_name',
+      'invited_by',
+      'expires_at',
+    ],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      invitation_intent_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_name: {
+        type: 'string',
+        minLength: 1,
+      },
+      invited_by: {
+        type: ['string', 'null'],
+      },
+      expires_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+    },
+  },
+  ClientInvitationPendingList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/ClientInvitationPending',
+        },
+      },
+    },
+  },
   ClientInvitationPresentation: {
     type: 'object',
     additionalProperties: false,
@@ -2719,10 +2781,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'organization',
       'expires_at',
       'scope_options',
+      'invited_by',
     ],
     properties: {
       id: {
         $ref: '#/components/schemas/UuidV7',
+      },
+      invited_by: {
+        type: ['string', 'null'],
+        description: 'Who sent it, by name. Null when the sender is no longer known.',
       },
       invitation_intent_id: {
         $ref: '#/components/schemas/UuidV7',
@@ -4906,6 +4973,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: ['string', 'null'],
         description:
           "The part the body figure in Space's onboarding already draws, when there is one, so the filter and the figure speak one vocabulary. Null for what is not a drawable part.",
+      },
+    },
+  },
+  MyRelationshipTermination: {
+    description:
+      'Her relationship after she ended it. `ended_at` is the instant everything it shared was frozen.',
+    type: 'object',
+    additionalProperties: false,
+    required: ['relationship_id', 'ended_at', 'frozen_grants', 'closed_assignments'],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      ended_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      frozen_grants: {
+        type: 'integer',
+      },
+      closed_assignments: {
+        type: 'integer',
       },
     },
   },
@@ -9225,6 +9314,26 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  RelationshipSubstitutionDecision: {
+    description:
+      'The cover after her answer. Accepted runs from its first day; rejected grants nothing and stays as the record of a no.',
+    type: 'object',
+    additionalProperties: false,
+    required: ['assignment_id', 'status', 'accepted_by_person_at'],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      status: {
+        type: 'string',
+        enum: ['active', 'rejected'],
+      },
+      accepted_by_person_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
   RelationshipSubstitutionPage: {
     type: 'object',
     additionalProperties: false,
@@ -12497,10 +12606,15 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'started_at',
       'ended_at',
       'previous_relationship_id',
+      'holder_name',
     ],
     properties: {
       relationship_id: {
         $ref: '#/components/schemas/UuidV7',
+      },
+      holder_name: {
+        type: ['string', 'null'],
+        description: 'The coach in charge of her now, by name. Null when nobody is.',
       },
       organization_id: {
         $ref: '#/components/schemas/UuidV7',
@@ -13809,6 +13923,17 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       status: {
         $ref: '#/components/schemas/SubscriptionStatus',
+      },
+    },
+  },
+  SubstitutionDecisionCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['decision'],
+    properties: {
+      decision: {
+        type: 'string',
+        enum: ['accepted', 'rejected'],
       },
     },
   },

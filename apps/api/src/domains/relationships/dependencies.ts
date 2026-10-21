@@ -1,5 +1,6 @@
 import {
   createClientDirectoryService,
+  createMyRelationshipCommandService,
   createMyRelationshipService,
   createHolderAssignmentService,
   createHolderReassignmentService,
@@ -10,6 +11,7 @@ import {
   createSubstitutionListService,
   createRelationshipTerminationService,
   type ClientDirectoryService,
+  type MyRelationshipCommandService,
   type MyRelationshipService,
   type HolderAssignmentService,
   type HolderReassignmentService,
@@ -22,6 +24,7 @@ import {
 } from './application/index.js'
 import {
   createClientDirectoryDatabase,
+  createMyRelationshipCommandDatabase,
   createMyRelationshipDatabase,
   createHolderAssignmentDatabase,
   createHolderReassignmentDatabase,
@@ -35,6 +38,15 @@ import {
 
 let cached: ClientDirectoryService | undefined
 let cachedMine: MyRelationshipService | undefined
+let cachedMineCommands: MyRelationshipCommandService | undefined
+
+export function myRelationshipCommandService(): MyRelationshipCommandService {
+  cachedMineCommands ??= createMyRelationshipCommandService(
+    createRelationshipHistoryDatabase(),
+    createMyRelationshipCommandDatabase(),
+  )
+  return cachedMineCommands
+}
 let cachedHolders: HolderAssignmentService | undefined
 let cachedStates: RelationshipStateService | undefined
 let cachedReassignments: HolderReassignmentService | undefined

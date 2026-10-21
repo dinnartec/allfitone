@@ -65,7 +65,19 @@ export interface ClientInvitationPresentation {
     responsibleParty: Record<string, unknown>
   }
   expiresAt: Date
+  /** Who sent it, by name; null when that is no longer known. */
+  invitedBy: string | null
   scopeOptions: ClientInvitationScopeOption[]
+}
+
+/** An invitation still waiting, addressed to the caller's verified email. */
+export interface ClientInvitationPending {
+  id: string
+  intentId: string
+  organizationId: string
+  organizationName: string
+  invitedBy: string | null
+  expiresAt: Date
 }
 
 export interface ClientInvitationDecisionResult {
@@ -99,11 +111,24 @@ export interface ClientInvitationDatabase {
     requestId: string
   }): Promise<ClientInvitationPresentation | undefined>
 
+  /** Somebody still registering has no person yet, and may still be told. */
+  listMine(input: {
+    personId: string | null
+    verifiedEmail: string
+  }): Promise<ClientInvitationPending[]>
+
+  readMine(input: {
+    personId: string
+    verifiedEmail: string
+    invitationId: string
+  }): Promise<ClientInvitationPresentation | undefined>
+
   decide(
     input: CommandContext & {
       personId: string
       verifiedEmail: string
-      tokenHash: Uint8Array
+      /** The emailed token's hash, or the id of one of her pending invitations. */
+      invitation: { tokenHash: Uint8Array } | { invitationId: string }
       intentId: string
       relationshipDecision: ConsentDecision
       scopeDecisions: Record<string, ConsentDecision>

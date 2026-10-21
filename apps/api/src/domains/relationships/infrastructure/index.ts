@@ -22,7 +22,9 @@ import type {
   RelationshipTerminationDatabase,
   SubstitutionTerminationDatabase,
   MyRelationship,
+  MyRelationshipCommandDatabase,
   MyRelationshipDatabase,
+  SubstitutionDecision,
 } from '../domain/index.js'
 
 type DirectoryRow = {
@@ -190,7 +192,7 @@ export function createRelationshipHistoryDatabase(
           return transaction<{ history: HistoryDocument }[]>`
             select relationships.read_relationship_history(
               ${personId}::uuid,
-              ${query.organizationId}::uuid,
+              ${query.organizationId ?? null}::uuid,
               ${query.relationshipId}::uuid,
               ${query.limit}::integer,
               ${query.cursor}::text
@@ -594,6 +596,7 @@ type MyRelationshipRow = {
   started_at: string
   ended_at: string | null
   previous_relationship_id: string | null
+  holder_name: string | null
 }
 
 function presentMyRelationship(row: MyRelationshipRow): MyRelationship {
@@ -606,6 +609,85 @@ function presentMyRelationship(row: MyRelationshipRow): MyRelationship {
     started_at: new Date(row.started_at).toISOString(),
     ended_at: row.ended_at ? new Date(row.ended_at).toISOString() : null,
     previous_relationship_id: row.previous_relationship_id,
+    holder_name: row.holder_name,
+  }
+}
+
+/**
+ * `OP-REL-005` and `OP-REL-007`, the person's own. Timestamps go out as text, cast in
+ * the query, so the server's timezone never leaks into an instant.
+ */
+export function createMyRelationshipCommandDatabase(
+  sql: postgres.Sql = database(),
+): MyRelationshipCommandDatabase {
+  return {
+    decideSubstitution: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.personId)
+          const [decided] = await transaction<
+            {
+              assignment_id: string
+              status: SubstitutionDecision['status']
+              accepted_by_person_at: string | null
+              replayed: boolean
+            }[]
+          >`
+            select assignment_id, status, accepted_by_person_at::text as accepted_by_person_at, replayed
+            from relationships.decide_substitution(
+              ${input.personId}::uuid, ${input.relationshipId}::uuid, ${input.assignmentId}::uuid,
+              ${input.decision}, ${input.idempotencyKey}::uuid, ${input.commandId}::uuid,
+              ${input.requestHash}
+            )
+          `
+          return decided
+        })
+        if (!row) throw new Error('decide_substitution returned no row')
+        return {
+          resource: {
+            assignmentId: row.assignment_id,
+            status: row.status,
+            acceptedByPersonAt: row.accepted_by_person_at
+              ? new Date(row.accepted_by_person_at).toISOString()
+              : null,
+          },
+          replayed: row.replayed,
+        }
+      }),
+
+    endRelationship: (input) =>
+      measureStudioRequestPhase('business-db', async () => {
+        const row = await sql.begin(async (transaction) => {
+          await setPersonActor(transaction, input.personId)
+          const [ended] = await transaction<
+            {
+              relationship_id: string
+              ended_at: string
+              frozen_grants: number
+              closed_assignments: number
+              replayed: boolean
+            }[]
+          >`
+            select relationship_id, ended_at::text as ended_at, frozen_grants,
+                   closed_assignments, replayed
+            from relationships.end_my_relationship(
+              ${input.personId}::uuid, ${input.relationshipId}::uuid, ${input.reason},
+              ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+            )
+          `
+          return ended
+        })
+        if (!row) throw new Error('end_my_relationship returned no row')
+        return {
+          resource: {
+            relationshipId: row.relationship_id,
+            endedAt: new Date(row.ended_at).toISOString(),
+            frozenGrants: row.frozen_grants,
+            closedAssignments: row.closed_assignments,
+          },
+          replayed: row.replayed,
+        }
+      }),
   }
 }
 
@@ -627,8 +709,11 @@ export function createSubstitutionListDatabase(
       measureStudioRequestPhase('business-db', async () => {
         const outcome = await sql.begin(async (transaction) => {
           await setPersonActor(transaction, personId)
+          // A date as text: the driver turns a bare date into a midnight instant.
           const rows = await transaction<ListedSubstitutionRow[]>`
-            select * from relationships.list_relationship_substitutions(
+            select assignment_id, membership_id, professional_person_id, display_name,
+                   status, valid_from, valid_to, ends_on::text as ends_on, accepted_by_person_at
+            from relationships.list_relationship_substitutions(
               ${personId}::uuid,
               ${query.organizationId ?? null}::uuid,
               ${query.relationshipId}::uuid,

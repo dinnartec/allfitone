@@ -210,7 +210,8 @@ export interface RelationshipHistoryDatabase {
   readHistory(
     actorPersonId: string,
     query: {
-      organizationId: string
+      /** Null on Space: the person reads her own, with no organization. */
+      organizationId: string | null
       relationshipId: string
       limit: number | null
       cursor: string | null
@@ -411,6 +412,36 @@ export interface SubstitutionListDatabase {
  * thing and a mapping layer between them would only be a place to drop a field.
  */
 export type MyRelationship = AllfitV1Schemas['SpaceRelationship']
+
+/** Her answer to a cover (`OP-REL-005`). */
+export interface SubstitutionDecision {
+  readonly assignmentId: string
+  readonly status: 'active' | 'rejected'
+  readonly acceptedByPersonAt: string | null
+}
+
+/** Her relationship after she ended it (`OP-REL-007`). */
+export interface MyRelationshipEnd {
+  readonly relationshipId: string
+  readonly endedAt: string
+  readonly frozenGrants: number
+  readonly closedAssignments: number
+}
+
+/** What the person does to her own relationships from Space. */
+export interface MyRelationshipCommandDatabase {
+  decideSubstitution(
+    input: CommandContext & {
+      personId: string
+      relationshipId: string
+      assignmentId: string
+      decision: 'accepted' | 'rejected'
+    },
+  ): Promise<CommandResult<SubstitutionDecision>>
+  endRelationship(
+    input: CommandContext & { personId: string; relationshipId: string; reason: string | null },
+  ): Promise<CommandResult<MyRelationshipEnd>>
+}
 
 export interface MyRelationshipPage {
   items: MyRelationship[]

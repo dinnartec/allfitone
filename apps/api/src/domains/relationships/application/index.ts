@@ -7,6 +7,7 @@ import type {
   HolderAssignmentDatabase,
   HolderReassignmentDatabase,
   RelationshipHistory,
+  MyRelationshipCommandDatabase,
   RelationshipHistoryDatabase,
   RelationshipState,
   RelationshipStateDatabase,
@@ -298,6 +299,33 @@ export function createSubstitutionListService(
  * token before anything else, and there is no incomplete-registration case to report —
  * somebody without a person has no relationships to list.
  */
+/**
+ * The person's own relationships from Space: the history (`OP-REL-014`), a cover
+ * (`OP-REL-005`) and the end (`OP-REL-007`). The person comes from the token; whose
+ * relationship it is, and whether it can still be answered or ended, is the command's
+ * decision.
+ */
+export interface MyRelationshipCommandService {
+  readHistory(
+    personId: string,
+    query: { relationshipId: string; limit: number | null; cursor: string | null },
+  ): Promise<RelationshipHistory>
+  decideSubstitution: MyRelationshipCommandDatabase['decideSubstitution']
+  endRelationship: MyRelationshipCommandDatabase['endRelationship']
+}
+
+export function createMyRelationshipCommandService(
+  histories: RelationshipHistoryDatabase,
+  commands: MyRelationshipCommandDatabase,
+): MyRelationshipCommandService {
+  return {
+    readHistory: (personId, query) =>
+      histories.readHistory(personId, { organizationId: null, ...query }),
+    decideSubstitution: (input) => commands.decideSubstitution(input),
+    endRelationship: (input) => commands.endRelationship(input),
+  }
+}
+
 export interface MyRelationshipService {
   listMine(personId: string, query: MyRelationshipQuery): Promise<MyRelationshipPage>
 }

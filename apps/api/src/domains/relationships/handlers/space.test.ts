@@ -12,6 +12,7 @@ import { Hono } from 'hono'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import type { SpaceActorResolver } from '../../identity/index.js'
 import type {
+  MyRelationshipCommandService,
   MyRelationshipService,
   SubstitutionListService,
   SubstitutionTerminationService,
@@ -41,6 +42,7 @@ function relationship(overrides: Partial<MyRelationship> = {}): MyRelationship {
     started_at: '2026-07-01T14:00:00.000Z',
     ended_at: null,
     previous_relationship_id: null,
+    holder_name: 'Laura Gómez',
     ...overrides,
   }
 }
@@ -328,5 +330,160 @@ describe('who has been authorised over my data', () => {
   test('is never stored by a cache', async () => {
     const response = await listApp().fetch(askList())
     expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+})
+
+const COMMAND_HEADERS = {
+  ...AUTH,
+  'content-type': 'application/json',
+  'idempotency-key': '51111111-1111-4111-8111-111111111111',
+  'command-id': '019c7000-0000-7000-8000-000000000901',
+}
+const COVER = '019c7000-0000-7000-8000-000000000401'
+
+function mine(overrides: Partial<MyRelationshipCommandService> = {}): MyRelationshipCommandService {
+  return {
+    readHistory: async () => ({
+      relationshipId: RELATIONSHIP,
+      personId: PERSON,
+      events: [],
+      nextCursor: null,
+      hasMore: false,
+    }),
+    decideSubstitution: async () => ({
+      resource: {
+        assignmentId: COVER,
+        status: 'active',
+        acceptedByPersonAt: '2026-11-04T15:20:00.000Z',
+      },
+      replayed: false,
+    }),
+    endRelationship: async () => ({
+      resource: {
+        relationshipId: RELATIONSHIP,
+        endedAt: '2026-11-04T15:20:00.000Z',
+        frozenGrants: 2,
+        closedAssignments: 1,
+      },
+      replayed: false,
+    }),
+    ...overrides,
+  }
+}
+
+function mineApp(commands: MyRelationshipCommandService = mine()): Hono {
+  const routes = new Hono()
+  routes.route(
+    '/space/v1',
+    spaceRelationshipRoutes(service(), verifier, actors, undefined, undefined, commands),
+  )
+  return routes
+}
+
+describe('her gyms name her coach', () => {
+  test('T-REL-API-SPACE-01 each relationship says who is in charge of her', async () => {
+    const response = await app(service()).request('/space/v1/relationships', { headers: AUTH })
+    const body = (await response.json()) as { data: MyRelationship[] }
+    expect(body.data[0]?.holder_name).toBe('Laura Gómez')
+  })
+})
+
+describe('the history of her relationship', () => {
+  test('T-REL-API-SPACE-02 reads it as herself, with no organization', async () => {
+    const seen: Record<string, unknown> = {}
+    const response = await mineApp(
+      mine({
+        readHistory: async (personId, query) => {
+          Object.assign(seen, { personId, ...query })
+          return {
+            relationshipId: RELATIONSHIP,
+            personId,
+            events: [],
+            nextCursor: null,
+            hasMore: false,
+          }
+        },
+      }),
+    ).request(`/space/v1/relationships/${RELATIONSHIP}/events`, { headers: AUTH })
+    expect(response.status).toBe(200)
+    expect(seen.personId).toBe(PERSON)
+    expect(seen.relationshipId).toBe(RELATIONSHIP)
+  })
+
+  test('T-REL-API-SPACE-03 one that is not hers is not found', async () => {
+    const response = await mineApp(
+      mine({
+        readHistory: async () => {
+          throw Object.assign(new Error('nope'), { code: 'P0002' })
+        },
+      }),
+    ).request(`/space/v1/relationships/${RELATIONSHIP}/events`, { headers: AUTH })
+    expect(response.status).toBe(404)
+  })
+})
+
+describe('answering a cover', () => {
+  const decide = (body: unknown, headers: Record<string, string> = COMMAND_HEADERS) =>
+    mineApp().request(`/space/v1/relationships/${RELATIONSHIP}/substitutions/${COVER}/decision`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+
+  test('T-REL-API-SPACE-04 her yes makes it run', async () => {
+    const response = await decide({ decision: 'accepted' })
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { status: string }).status).toBe('active')
+  })
+
+  test('T-REL-API-SPACE-05 refuses anything but yes or no', async () => {
+    expect((await decide({ decision: 'maybe' })).status).toBe(400)
+  })
+
+  test('T-REL-API-SPACE-06 without command headers it is not a command', async () => {
+    expect(
+      (await decide({ decision: 'accepted' }, { ...AUTH, 'content-type': 'application/json' }))
+        .status,
+    ).toBe(400)
+  })
+
+  test('T-REL-API-SPACE-07 a cover already decided is a conflict', async () => {
+    const response = await mineApp(
+      mine({
+        decideSubstitution: async () => {
+          throw Object.assign(new Error('decided'), { code: 'P0004' })
+        },
+      }),
+    ).request(`/space/v1/relationships/${RELATIONSHIP}/substitutions/${COVER}/decision`, {
+      method: 'POST',
+      headers: COMMAND_HEADERS,
+      body: JSON.stringify({ decision: 'rejected' }),
+    })
+    expect(response.status).toBe(409)
+  })
+})
+
+describe('ending her relationship', () => {
+  const end = (body: unknown, headers: Record<string, string> = COMMAND_HEADERS) =>
+    mineApp().request(`/space/v1/relationships/${RELATIONSHIP}/termination`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+
+  test('T-REL-API-SPACE-08 answers the instant and what was frozen', async () => {
+    const response = await end({ reason: 'Me mudé' })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      relationship_id: RELATIONSHIP,
+      ended_at: '2026-11-04T15:20:00.000Z',
+      frozen_grants: 2,
+      closed_assignments: 1,
+    })
+  })
+
+  test('T-REL-API-SPACE-09 a reason is optional, a blank one is refused', async () => {
+    expect((await end({})).status).toBe(200)
+    expect((await end({ reason: '' })).status).toBe(400)
   })
 })

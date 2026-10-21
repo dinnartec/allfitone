@@ -3080,6 +3080,77 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/client-invitations:
+    get:
+      tags: [Space Identity]
+      operationId: listMySpaceClientInvitations
+      x-allfit-operation: OP-IDN-056
+      x-allfit-cache: no-store
+      summary: The invitations waiting for the caller
+      description: >-
+        Pending, unexpired client invitations addressed to the caller's verified
+        email — the only key, the same one deciding requires (ADR-001). Somebody still
+        registering may ask: it is how she is told an invitation waits at the end. An
+        invitation addressed to any other email is never listed.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Her pending invitations, the soonest to expire first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInvitationPendingList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/client-invitations/{invitationId}:
+    get:
+      tags: [Space Identity]
+      operationId: readMySpaceClientInvitation
+      x-allfit-operation: OP-REL-015
+      x-allfit-cache: no-store
+      summary: What one of her invitations asks for, by id
+      description: >-
+        The same presentation the emailed link resolves to, for an invitation found
+        among her pending ones. The same recipient test applies: another person is
+        refused, and one that does not exist or expired answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: What the invitation asks for
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInvitationPresentation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/client-invitations/decisions:
     post:
       tags: [Space Identity]
@@ -6115,6 +6186,154 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RelationshipSubstitutionTermination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships/{relationshipId}/events:
+    get:
+      tags: [Space Relationships]
+      operationId: listMyRelationshipEvents
+      x-allfit-operation: OP-REL-014
+      x-allfit-cache: private-no-store
+      summary: What her relationship has been through
+      description: >-
+        The same timeline the gym reads, from her side and only for her own
+        relationships. Each side reads the termination reason it declared and not the
+        other's: if the gym ended it, `reason` is null for her.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RelationshipId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 1024
+      responses:
+        '200':
+          description: A page of her relationship's history, newest first
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipHistoryPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships/{relationshipId}/termination:
+    post:
+      tags: [Space Relationships]
+      operationId: endMyRelationship
+      x-allfit-operation: OP-REL-007
+      x-allfit-cache: no-store
+      summary: End her relationship with a gym
+      description: >-
+        Takes effect at once: everything she shared is frozen at one instant, the gym
+        keeps what it was shown up to then and receives nothing after, and nobody stays
+        assigned to her. A reason is optional and only she reads it. Ending one that is
+        already over answers the instant it ended.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationshipTerminationCreate'
+      responses:
+        '200':
+          description: The relationship is over
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyRelationshipTermination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/decision:
+    post:
+      tags: [Space Relationships]
+      operationId: decideMyRelationshipSubstitution
+      x-allfit-operation: OP-REL-005
+      x-allfit-cache: no-store
+      summary: Accept or reject somebody covering for her coach
+      description: >-
+        A cover runs only once she says yes, and a no is kept as a no; silence is
+        neither (ADR-022). It is decided once: a second answer is `409`, and a retry of
+        the same command answers the same.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RelationshipId'
+        - $ref: '#/components/parameters/SubstitutionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubstitutionDecisionCreate'
+      responses:
+        '200':
+          description: Her answer, recorded
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RelationshipSubstitutionDecision'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -11000,6 +11219,12 @@ components:
         type: integer
         minimum: 1
         maximum: 2147483647
+    InvitationId:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UuidV7'
     RelationshipId:
       name: relationshipId
       in: path
@@ -16752,10 +16977,13 @@ components:
     ClientInvitationPresentation:
       type: object
       additionalProperties: false
-      required: [id, invitation_intent_id, status, organization, expires_at, scope_options]
+      required: [id, invitation_intent_id, status, organization, expires_at, scope_options, invited_by]
       properties:
         id:
           $ref: '#/components/schemas/UuidV7'
+        invited_by:
+          type: [string, 'null']
+          description: Who sent it, by name. Null when the sender is no longer known.
         invitation_intent_id:
           $ref: '#/components/schemas/UuidV7'
         status:
@@ -16780,10 +17008,19 @@ components:
           items:
             $ref: '#/components/schemas/ClientInvitationScopeOption'
     ClientInvitationDecisionCreate:
+      description: >-
+        The invitation is named by the emailed token or, for one found among the
+        caller's pending invitations, by its id. Exactly one of the two. Either way only
+        the person whose verified email it was addressed to may decide it.
       type: object
       additionalProperties: false
-      required: [token, invitation_intent_id, relationship_decision]
+      required: [invitation_intent_id, relationship_decision]
+      oneOf:
+        - required: [token]
+        - required: [invitation_id]
       properties:
+        invitation_id:
+          $ref: '#/components/schemas/UuidV7'
         token:
           type: string
           minLength: 43
@@ -16802,6 +17039,79 @@ components:
           description: >-
             One answer per scope, keyed by scope code. A scope left out counts as
             rejected: silence is not consent.
+    ClientInvitationPending:
+      description: >-
+        An invitation still waiting for an answer, addressed to the caller's verified
+        email. Enough to say who is waiting and until when; what it asks for is read
+        by id.
+      type: object
+      additionalProperties: false
+      required: [id, invitation_intent_id, organization_id, organization_name, invited_by, expires_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        invitation_intent_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_name:
+          type: string
+          minLength: 1
+        invited_by:
+          type: [string, 'null']
+        expires_at:
+          type: string
+          format: date-time
+    ClientInvitationPendingList:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientInvitationPending'
+    SubstitutionDecisionCreate:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [accepted, rejected]
+    RelationshipSubstitutionDecision:
+      description: >-
+        The cover after her answer. Accepted runs from its first day; rejected grants
+        nothing and stays as the record of a no.
+      type: object
+      additionalProperties: false
+      required: [assignment_id, status, accepted_by_person_at]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/UuidV7'
+        status:
+          type: string
+          enum: [active, rejected]
+        accepted_by_person_at:
+          type: [string, 'null']
+          format: date-time
+    MyRelationshipTermination:
+      description: >-
+        Her relationship after she ended it. `ended_at` is the instant everything it
+        shared was frozen.
+      type: object
+      additionalProperties: false
+      required: [relationship_id, ended_at, frozen_grants, closed_assignments]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        ended_at:
+          type: string
+          format: date-time
+        frozen_grants:
+          type: integer
+        closed_assignments:
+          type: integer
     ClientInvitationDecisionResult:
       type: object
       additionalProperties: false
@@ -22415,10 +22725,13 @@ components:
       additionalProperties: false
       required:
         [relationship_id, organization_id, organization_name, organization_type_code,
-         status, started_at, ended_at, previous_relationship_id]
+         status, started_at, ended_at, previous_relationship_id, holder_name]
       properties:
         relationship_id:
           $ref: '#/components/schemas/UuidV7'
+        holder_name:
+          type: [string, 'null']
+          description: The coach in charge of her now, by name. Null when nobody is.
         organization_id:
           $ref: '#/components/schemas/UuidV7'
         organization_name:

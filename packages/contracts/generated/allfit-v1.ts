@@ -1233,6 +1233,46 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/client-invitations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The invitations waiting for the caller
+     * @description Pending, unexpired client invitations addressed to the caller's verified email — the only key, the same one deciding requires (ADR-001). Somebody still registering may ask: it is how she is told an invitation waits at the end. An invitation addressed to any other email is never listed.
+     */
+    get: operations['listMySpaceClientInvitations']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/client-invitations/{invitationId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What one of her invitations asks for, by id
+     * @description The same presentation the emailed link resolves to, for an invitation found among her pending ones. The same recipient test applies: another person is refused, and one that does not exist or expired answers `404`.
+     */
+    get: operations['readMySpaceClientInvitation']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/client-invitations/decisions': {
     parameters: {
       query?: never
@@ -2433,6 +2473,66 @@ export interface paths {
      *     Unlike proposing one, the coach in charge may **not** call this: it is for an administrator or an owner. The person being covered has their own route for it in Space.
      */
     post: operations['endRelationshipSubstitution']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/events': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What her relationship has been through
+     * @description The same timeline the gym reads, from her side and only for her own relationships. Each side reads the termination reason it declared and not the other's: if the gym ended it, `reason` is null for her.
+     */
+    get: operations['listMyRelationshipEvents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/termination': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * End her relationship with a gym
+     * @description Takes effect at once: everything she shared is frozen at one instant, the gym keeps what it was shown up to then and receives nothing after, and nobody stays assigned to her. A reason is optional and only she reads it. Ending one that is already over answers the instant it ended.
+     */
+    post: operations['endMyRelationship']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/relationships/{relationshipId}/substitutions/{substitutionId}/decision': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Accept or reject somebody covering for her coach
+     * @description A cover runs only once she says yes, and a no is kept as a no; silence is neither (ADR-022). It is decided once: a second answer is `409`, and a retry of the same command answers the same.
+     */
+    post: operations['decideMyRelationshipSubstitution']
     delete?: never
     options?: never
     head?: never
@@ -6512,6 +6612,8 @@ export interface components {
     }
     ClientInvitationPresentation: {
       id: components['schemas']['UuidV7']
+      /** @description Who sent it, by name. Null when the sender is no longer known. */
+      invited_by: string | null
       invitation_intent_id: components['schemas']['UuidV7']
       status: components['schemas']['TeamInvitationStatus']
       organization: {
@@ -6523,8 +6625,10 @@ export interface components {
       expires_at: string
       scope_options: components['schemas']['ClientInvitationScopeOption'][]
     }
+    /** @description The invitation is named by the emailed token or, for one found among the caller's pending invitations, by its id. Exactly one of the two. Either way only the person whose verified email it was addressed to may decide it. */
     ClientInvitationDecisionCreate: {
-      token: string
+      invitation_id?: components['schemas']['UuidV7']
+      token?: string
       invitation_intent_id: components['schemas']['UuidV7']
       /** @enum {string} */
       relationship_decision: 'accepted' | 'rejected'
@@ -6532,6 +6636,39 @@ export interface components {
       scope_decisions?: {
         [key: string]: 'accepted' | 'rejected'
       }
+    } & (unknown | unknown)
+    /** @description An invitation still waiting for an answer, addressed to the caller's verified email. Enough to say who is waiting and until when; what it asks for is read by id. */
+    ClientInvitationPending: {
+      id: components['schemas']['UuidV7']
+      invitation_intent_id: components['schemas']['UuidV7']
+      organization_id: components['schemas']['UuidV7']
+      organization_name: string
+      invited_by: string | null
+      /** Format: date-time */
+      expires_at: string
+    }
+    ClientInvitationPendingList: {
+      data: components['schemas']['ClientInvitationPending'][]
+    }
+    SubstitutionDecisionCreate: {
+      /** @enum {string} */
+      decision: 'accepted' | 'rejected'
+    }
+    /** @description The cover after her answer. Accepted runs from its first day; rejected grants nothing and stays as the record of a no. */
+    RelationshipSubstitutionDecision: {
+      assignment_id: components['schemas']['UuidV7']
+      /** @enum {string} */
+      status: 'active' | 'rejected'
+      /** Format: date-time */
+      accepted_by_person_at: string | null
+    }
+    /** @description Her relationship after she ended it. `ended_at` is the instant everything it shared was frozen. */
+    MyRelationshipTermination: {
+      relationship_id: components['schemas']['UuidV7']
+      /** Format: date-time */
+      ended_at: string
+      frozen_grants: number
+      closed_assignments: number
     }
     ClientInvitationDecisionResult: {
       invitation_id: components['schemas']['UuidV7']
@@ -9373,6 +9510,8 @@ export interface components {
     /** @description One bond between the caller and an organization. `previous_relationship_id` is set when she had another with the same organization before this one. */
     SpaceRelationship: {
       relationship_id: components['schemas']['UuidV7']
+      /** @description The coach in charge of her now, by name. Null when nobody is. */
+      holder_name: string | null
       organization_id: components['schemas']['UuidV7']
       organization_name: string
       organization_type_code: string
@@ -9778,6 +9917,7 @@ export interface components {
     ProgramId: components['schemas']['Uuid']
     TemplateId: components['schemas']['Uuid']
     VersionNumber: number
+    InvitationId: components['schemas']['UuidV7']
     RelationshipId: components['schemas']['Uuid']
     SubstitutionId: components['schemas']['Uuid']
     PlannedSessionId: components['schemas']['Uuid']
@@ -12023,6 +12163,60 @@ export interface operations {
       403: components['responses']['Forbidden']
       404: components['responses']['NotFound']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMySpaceClientInvitations: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Her pending invitations, the soonest to expire first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitationPendingList']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  readMySpaceClientInvitation: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        invitationId: components['parameters']['InvitationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description What the invitation asks for */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ClientInvitationPresentation']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
       503: components['responses']['UpstreamUnavailable']
     }
   }
@@ -14355,6 +14549,116 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['RelationshipSubstitutionTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyRelationshipEvents: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: string
+      }
+      header?: never
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description A page of her relationship's history, newest first */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipHistoryPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  endMyRelationship: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RelationshipTerminationCreate']
+      }
+    }
+    responses: {
+      /** @description The relationship is over */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MyRelationshipTermination']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  decideMyRelationshipSubstitution: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        relationshipId: components['parameters']['RelationshipId']
+        substitutionId: components['parameters']['SubstitutionId']
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SubstitutionDecisionCreate']
+      }
+    }
+    responses: {
+      /** @description Her answer, recorded */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RelationshipSubstitutionDecision']
         }
       }
       400: components['responses']['BadRequest']
