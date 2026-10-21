@@ -135,7 +135,6 @@ export const es = {
     terms: 'Términos',
     privacy: 'Privacidad',
     studio: 'Allfit Studio',
-    one: 'Allfit One',
     rights: '© 2026 Allfit One',
     newWindow: 'Se abre en una pestaña nueva.',
   },

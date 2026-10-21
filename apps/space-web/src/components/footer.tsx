@@ -1,3 +1,4 @@
+import { ExternalIcon } from '@allfitone/react/icons'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -5,10 +6,6 @@ import type { Dictionary } from '@/content'
 import type { Locale } from '@/lib/locale'
 
 export function Footer({ locale, copy }: { locale: Locale; copy: Dictionary }) {
-  const outside = [
-    { label: copy.footer.studio, href: `https://www.allfit.one/${locale}` },
-    { label: copy.footer.one, href: `https://www.allfit.one/${locale}` },
-  ]
   return (
     <footer className="footer">
       <div className="wrap partner">
@@ -26,12 +23,10 @@ export function Footer({ locale, copy }: { locale: Locale; copy: Dictionary }) {
         </div>
       </div>
       <div className="wrap footer__bar">
-        <Image
-          src="/brand/allfit-space-lockup-on-dark.svg"
-          alt="Allfit Space"
-          width={123}
-          height={30}
-        />
+        <a href={`https://www.allfit.one/${locale}`} className="footer__parent">
+          Allfit One
+          <ExternalIcon size="sm" decorative />
+        </a>
         <ul className="footer__links">
           <li>
             <Link href={`/${locale}/terms`}>{copy.footer.terms}</Link>
@@ -39,17 +34,15 @@ export function Footer({ locale, copy }: { locale: Locale; copy: Dictionary }) {
           <li>
             <Link href={`/${locale}/privacy`}>{copy.footer.privacy}</Link>
           </li>
-          {outside.map((link) => (
-            <li key={link.label}>
-              <a href={link.href} target="_blank" rel="noopener">
-                {link.label}
-                <span className="sr-only"> {copy.footer.newWindow}</span>
-              </a>
-            </li>
-          ))}
-          <li>{copy.footer.rights}</li>
+          <li>
+            <a href={`https://studio.allfit.one/${locale}`} target="_blank" rel="noopener">
+              {copy.footer.studio}
+              <span className="sr-only"> {copy.footer.newWindow}</span>
+            </a>
+          </li>
         </ul>
       </div>
+      <p className="wrap footer__meta">{copy.footer.rights}</p>
     </footer>
   )
 }

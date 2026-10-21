@@ -1532,18 +1532,16 @@ html[data-motion='on'] .privacy__stage[data-reveal].is-in {
 
 .partner {
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: clamp(28px, 4vw, 56px);
+  justify-items: center;
+  gap: 24px;
   padding-block: 64px;
   border-top: 1px solid var(--line);
+  text-align: center;
 }
 
 .partner img {
   width: 200px;
   height: auto;
-  /* The badge carries its own clear space; this lines its plate up with the column. */
-  margin-left: -10px;
 }
 
 .partner p {
@@ -1553,20 +1551,16 @@ html[data-motion='on'] .privacy__stage[data-reveal].is-in {
 .partner__member {
   font-size: 20px;
   font-weight: 600;
+  text-wrap: balance;
 }
 
 .partner .partner__legal {
-  margin-top: 8px;
+  margin: 8px auto 0;
   max-width: 70ch;
   color: var(--text-faint);
   font-size: 13px;
   line-height: 1.6;
-}
-
-@media (max-width: 700px) {
-  .partner {
-    grid-template-columns: 1fr;
-  }
+  text-wrap: balance;
 }
 
 /* ----------------------------------------------------------------- footer */
@@ -1584,9 +1578,30 @@ html[data-motion='on'] .privacy__stage[data-reveal].is-in {
   padding-block: 40px;
 }
 
-.footer__bar img {
-  height: 30px;
-  width: auto;
+/* The Design System's ghost sm button, as the earlier Space header used it. This app does not
+   load the Design System component styles, so the treatment is restated with its tokens. */
+.footer__parent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  /* Pulls the transparent padding out so the label lines up with the footer column. */
+  margin-inline-start: -15px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--afo-radius-action);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 15px;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    color var(--afo-motion-feedback-duration) var(--afo-motion-feedback-easing),
+    background-color var(--afo-motion-feedback-duration) var(--afo-motion-feedback-easing);
+}
+
+.footer__parent:hover {
+  background-color: var(--afo-color-action-secondary-hover);
 }
 
 .footer__links {
@@ -1609,6 +1624,20 @@ html[data-motion='on'] .privacy__stage[data-reveal].is-in {
 
 .footer__links a:hover {
   color: var(--text);
+}
+
+/* Same closing line as the main Allfit One landing: centered, last, in its small tracked capitals. */
+.footer__meta {
+  margin-block: 0;
+  padding-block: 24px;
+  border-top: 1px solid var(--line);
+  color: color-mix(in srgb, var(--afo-color-neutral-chalk) 52%, transparent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 /* ------------------------------------------------------------------ legal */

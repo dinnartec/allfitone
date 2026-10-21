@@ -130,7 +130,6 @@ export const en: Dictionary = {
     terms: 'Terms',
     privacy: 'Privacy',
     studio: 'Allfit Studio',
-    one: 'Allfit One',
     rights: '© 2026 Allfit One',
     newWindow: 'Opens in a new tab.',
   },
