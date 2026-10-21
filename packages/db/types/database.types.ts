@@ -2429,6 +2429,28 @@ export type Database = {
           result: Json
         }[]
       }
+      decide_my_client_invitation: {
+        Args: {
+          p_command_id: string
+          p_idempotency_key: string
+          p_intent_id: string
+          p_invitation_id: string
+          p_person_id: string
+          p_relationship_decision: string
+          p_request_hash: string
+          p_scope_decisions: Json
+        }
+        Returns: {
+          granted_scope_codes: string[]
+          intent_status: string
+          invitation_id: string
+          invitation_intent_id: string
+          invitation_status: string
+          organization_id: string
+          relationship_id: string
+          replayed: boolean
+        }[]
+      }
       decide_ownership_invitation: {
         Args: {
           p_command_id: string
@@ -2736,6 +2758,17 @@ export type Database = {
         }
         Returns: Json
       }
+      list_my_client_invitations: {
+        Args: never
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          invited_by: string
+          organization_id: string
+          organization_name: string
+        }[]
+      }
       list_staff_invitations: {
         Args: {
           p_cursor_created_at: string
@@ -2947,6 +2980,20 @@ export type Database = {
           status: string
         }[]
       }
+      read_my_client_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          invitation_intent_id: string
+          invited_by: string
+          organization_display_name: string
+          organization_id: string
+          responsible_party: Json
+          scope_options: Json
+          status: string
+        }[]
+      }
       read_training_profile: {
         Args: { p_person_id: string }
         Returns: {
@@ -3129,6 +3176,7 @@ export type Database = {
           expires_at: string
           invitation_id: string
           invitation_intent_id: string
+          invited_by: string
           organization_display_name: string
           organization_id: string
           responsible_party: Json
