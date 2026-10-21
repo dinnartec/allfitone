@@ -1300,6 +1300,33 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar el estado del vínculo')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients/information-categories` · HU-034 ---
+  {
+    // Seven cards of reference material, each with its own one-line limit. The
+    // widest text on the page is a summary, so this is where a card's title and
+    // its code badge compete for the same row on a phone.
+    stories: 'HU-034 · what each category of information covers',
+    path: `${workspace}/clients/information-categories`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Contexto de salud')).toBeVisible()
+    },
+  },
+  {
+    // One card open. The client wording is quoted behind a rule, and it is the
+    // longest prose the screen ever shows — four lines on a phone.
+    stories: 'HU-034 · the wording the client will read',
+    path: `${workspace}/clients/information-categories`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    reveal: async (page) => {
+      await page
+        .locator('[data-category-card="health_context"]')
+        .getByRole('button', { name: 'Ver lo que lee tu cliente' })
+        .click()
+      await expect(page.getByText('Lo que verá tu cliente')).toBeVisible()
+    },
+  },
   // --- `/organizations/[id]/clients/invitations/new` · HU-023 ---
   {
     stories: 'HU-023 · inviting somebody, with the permissions to choose from',

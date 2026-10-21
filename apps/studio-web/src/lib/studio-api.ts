@@ -35,6 +35,8 @@ export type OrganizationMembership = AllfitV1Schemas['OrganizationMembershipList
 export type OrganizationMembershipPage = AllfitV1Schemas['OrganizationMembershipPage']
 export type OrganizationMembershipStatus = AllfitV1Schemas['OrganizationMembershipStatus']
 export type OfferableScopeCatalog = AllfitV1Schemas['OfferableScopeCatalog']
+export type InformationCategoryList = AllfitV1Schemas['CatalogInformationCategoryList']
+export type InformationCategory = AllfitV1Schemas['CatalogInformationCategory']
 export type OfferableScope = AllfitV1Schemas['OfferableScope']
 export type ClientInvitationCreate = AllfitV1Schemas['ClientInvitationCreate']
 export type ClientInvitation = AllfitV1Schemas['ClientInvitation']
@@ -394,6 +396,18 @@ export const studioApi = {
 
   offerableScopes: (signal?: AbortSignal) =>
     request<OfferableScopeCatalog>('/studio/v1/offerable-scopes', {
+      cache: 'no-store',
+      ...(signal ? { signal } : {}),
+    }),
+
+  /**
+   * `OP-PRV-022`. The catalogue surface and not `/studio/v1`, because the same
+   * seven rows are what a member reads to know what they may ask for and what
+   * the person being asked reads to decide. Unlike `offerableScopes` it answers
+   * before anyone curates the permission catalogue: it reads the wording alone.
+   */
+  informationCategories: (signal?: AbortSignal) =>
+    request<InformationCategoryList>('/catalog/v1/information-categories', {
       cache: 'no-store',
       ...(signal ? { signal } : {}),
     }),
