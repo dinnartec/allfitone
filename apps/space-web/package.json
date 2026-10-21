@@ -1,0 +1,28 @@
+{
+  "name": "@allfitone/space-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3200",
+    "start:e2e": "next build && next start --hostname 127.0.0.1 --port 3201",
+    "build": "next build",
+    "start": "next start --port 3200",
+    "lint": "eslint . --ignore-pattern .next-e2e --ignore-pattern playwright-report --ignore-pattern test-results",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@allfitone/react": "0.14.1",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "1.62.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4"
+  }
+}
