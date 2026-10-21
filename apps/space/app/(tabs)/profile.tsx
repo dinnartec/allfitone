@@ -201,7 +201,8 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
                 icon="organization"
                 title={gym.organization_name}
                 caption="Te incluye Allfit Pro"
-                end="active"
+                end="open"
+                onPress={() => router.push('/gyms')}
               />
             ))
           ) : (
@@ -216,7 +217,8 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
             icon="history"
             title="Relaciones anteriores"
             caption="Las que ya terminaron"
-            end="soon"
+            end="open"
+            onPress={() => router.push('/gyms')}
           />
         </ProfileGroup>
 

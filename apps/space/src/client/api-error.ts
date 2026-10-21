@@ -29,6 +29,8 @@ export type ApiFailure =
    * identifier at a time.
    */
   | 'not-found'
+  /** Known, but not for this account: an invitation sent to another address. */
+  | 'forbidden'
   /** The API or the provider did not answer. Retryable; nothing else is. */
   | 'unavailable'
 
@@ -37,4 +39,14 @@ export class ApiError extends Error {
     super(failure)
     this.name = 'ApiError'
   }
+}
+
+export function failureFor(status: number): ApiFailure {
+  if (status === 400) return 'invalid-request'
+  if (status === 401) return 'unauthenticated'
+  if (status === 403) return 'forbidden'
+  if (status === 404) return 'not-found'
+  if (status === 409) return 'conflict'
+  if (status === 422) return 'validation-failed'
+  return 'unavailable'
 }

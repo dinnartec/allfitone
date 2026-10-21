@@ -46,6 +46,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { OnboardingBack } from '../../src/components/onboarding-header'
 import { ApiError } from '../../src/client'
+import { createSpaceInvitationFlow } from '../../src/client/gym-affiliation-transport'
 import { createSpaceOnboardingFlow } from '../../src/client/onboarding-transport'
 import { lastRevisitableStep, TODAY } from '../../src/client/onboarding-steps'
 import {
@@ -83,6 +84,7 @@ export default function OnboardingContinues() {
   // copy rather than an edge on the screen.
   const insets = useSafeAreaInsets()
   const flow = useMemo(() => createSpaceOnboardingFlow(), [])
+  const invitations = useMemo(() => createSpaceInvitationFlow(), [])
   const back = lastRevisitableStep()
 
   const [username, setUsername] = useState<string | undefined>(undefined)
@@ -132,7 +134,11 @@ export default function OnboardingContinues() {
     try {
       await flow.activate(completionFor(identity))
       setActivated(true)
-      router.replace(TODAY)
+      // An invitation waiting on her address is shown once, before Hoy (INV-3).
+      const pending = await invitations.listMine().catch(() => [])
+      const first = pending[0]
+      if (first) router.replace({ pathname: '/invitation/arrived', params: { id: first.id } })
+      else router.replace(TODAY)
     } catch (cause: unknown) {
       if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
         setSessionExpired(true)
