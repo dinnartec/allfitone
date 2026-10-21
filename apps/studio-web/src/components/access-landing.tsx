@@ -23,12 +23,13 @@ import {
   AccessShell,
   AccessTitle,
 } from '@allfitone/react/components/access-shell'
-import { Button, buttonVariants } from '@allfitone/react/components/button'
+import { Button } from '@allfitone/react/components/button'
 import { PulseMark } from '@allfitone/react/components/pulse-mark'
-import { ForwardIcon, FoundationIcon } from '@allfitone/react/icons'
+import { FoundationIcon } from '@allfitone/react/icons'
 import { useEffect, useRef } from 'react'
 
-import { prepareStudioAuthentication, type StudioSessionEndReason } from '@/lib/session-activity'
+import { StudioLanding } from './studio-landing'
+import { type StudioSessionEndReason } from '@/lib/session-activity'
 import { studioApi } from '@/lib/studio-api'
 
 interface SessionRecovery {
@@ -64,11 +65,11 @@ export function AccessLanding({
     if (secureStateActive) secureTitleRef.current?.focus()
   }, [secureStateActive])
 
-  const secureTitle = closing
-    ? 'Cerrando tu sesión'
-    : recovery
-      ? 'Tu sesión está protegida'
-      : 'Entra. El contexto ya está listo.'
+  // A signed-out visitor gets the landing. The two session states below are not
+  // a welcome: they hold the workspace hidden until the close is complete.
+  if (!secureState) return <StudioLanding logoutPartial={logoutPartial} />
+
+  const secureTitle = closing ? 'Cerrando tu sesión' : 'Tu sesión está protegida'
 
   return (
     <AccessShell>
@@ -98,25 +99,15 @@ export function AccessLanding({
         <AccessPanel aria-labelledby="studio-panel-title">
           <AccessPanelHeader>
             <AccessPanelEyebrow>
-              {closing
-                ? 'Sesión finalizada'
-                : recovery
-                  ? 'Sesión protegida'
-                  : 'Tu espacio de trabajo'}
+              {closing ? 'Sesión finalizada' : 'Sesión protegida'}
             </AccessPanelEyebrow>
-            <AccessPanelTitle
-              ref={secureTitleRef}
-              id="studio-panel-title"
-              tabIndex={secureState ? -1 : undefined}
-            >
+            <AccessPanelTitle ref={secureTitleRef} id="studio-panel-title" tabIndex={-1}>
               {secureTitle}
             </AccessPanelTitle>
             <AccessPanelDescription>
               {closing
                 ? closingDescription(closing.reason)
-                : recovery
-                  ? 'Completa el cierre antes de volver a autenticarte en este equipo.'
-                  : 'Accede de forma segura para continuar con tus espacios, equipo y actividad.'}
+                : 'Completa el cierre antes de volver a autenticarte en este equipo.'}
             </AccessPanelDescription>
           </AccessPanelHeader>
 
@@ -127,57 +118,32 @@ export function AccessLanding({
                 <AlertDescription>{recoveryDescription(recovery.reason)}</AlertDescription>
               </Alert>
             ) : null}
-            {logoutPartial ? (
-              <Alert variant="warning" live="polite">
-                <AlertTitle>La sesión se cerró en este equipo</AlertTitle>
-                <AlertDescription>
-                  No pudimos confirmar todo el cierre remoto. Si vuelves a entrar, completa de nuevo
-                  el acceso con el proveedor de identidad.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {closing ? null : (
+            {recovery ? (
               <AccessPanelAction>
-                {recovery ? (
-                  /* `AccessPanelAction` is a flex column with no gap: right for
-                     the single "Entrar a Studio" it was built around, but these
-                     two recovery actions met edge to edge, 0px apart. */
-                  <div data-access-recovery-actions>
-                    <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
-                      <input type="hidden" name="reason" value="recovery" />
-                      <Button type="submit" size="lg">
-                        Completar cierre
-                      </Button>
-                    </form>
-                    {recovery.retryable ? (
-                      <Button type="button" size="lg" variant="outline" onClick={recovery.onRetry}>
-                        Reintentar
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <a
-                    data-slot="button"
-                    data-variant="default"
-                    className={buttonVariants({ size: 'lg' })}
-                    href={`${studioApi.apiUrl}/studio/v1/auth/start`}
-                    onClick={prepareStudioAuthentication}
-                  >
-                    Entrar a Studio
-                    <ForwardIcon data-icon="inline-end" decorative />
-                  </a>
-                )}
+                {/* `AccessPanelAction` is a flex column with no gap: right for a
+                    single action, but these two recovery actions met edge to edge. */}
+                <div data-access-recovery-actions>
+                  <form action={`${studioApi.apiUrl}/studio/v1/auth/logout`} method="post">
+                    <input type="hidden" name="reason" value="recovery" />
+                    <Button type="submit" size="lg">
+                      Completar cierre
+                    </Button>
+                  </form>
+                  {recovery.retryable ? (
+                    <Button type="button" size="lg" variant="outline" onClick={recovery.onRetry}>
+                      Reintentar
+                    </Button>
+                  ) : null}
+                </div>
               </AccessPanelAction>
-            )}
+            ) : null}
           </AccessPanelContent>
 
           <AccessPanelNote>
             <FoundationIcon name="permissions" decorative />
             {closing
               ? 'Volverás a la pantalla de acceso en un momento.'
-              : recovery
-                ? 'No mostraremos información anterior hasta que vuelvas a autenticarte.'
-                : 'El inicio de sesión se completa con el proveedor de identidad de Allfit One.'}
+              : 'No mostraremos información anterior hasta que vuelvas a autenticarte.'}
           </AccessPanelNote>
         </AccessPanel>
 
