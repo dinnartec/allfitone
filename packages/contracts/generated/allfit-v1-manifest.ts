@@ -518,6 +518,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/catalog/v1/information-categories',
+      operationId: 'listCatalogInformationCategories',
+      allfitOperation: 'OP-PRV-022',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
+      method: 'GET',
       path: '/catalog/v1/movements',
       operationId: 'searchMovements',
       allfitOperation: 'OP-CAT-009',

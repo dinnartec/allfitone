@@ -81,6 +81,18 @@ export function catalogSurfaceRoutes(
     backofficeSessions,
   }
 
+  /*
+   * `OP-PRV-022`. Mounted here rather than on `/studio/v1` because the same
+   * seven rows are what a member reads to know what they may ask for and what
+   * the person being asked reads to decide. A Backoffice caller reaches this
+   * route like any other on the surface and is refused by the closed function,
+   * which is the honest answer: the wording is person-only by policy, and an
+   * empty list would read as "there are no categories".
+   */
+  routes.get('/information-categories', (c) =>
+    catalogResponse(c, surfaces, (reader) => catalog().listInformationCategories(reader)),
+  )
+
   routes.get('/disciplines', (c) =>
     catalogResponse(c, surfaces, (reader) => catalog().listDisciplines(reader)),
   )

@@ -43,6 +43,15 @@ const binding: AllfitV1Schemas['ActivityTypeResultContract'] = {
   valid_from: '2026-09-09T12:00:00.000Z',
 }
 
+const category: AllfitV1Schemas['CatalogInformationCategory'] = {
+  scope_code: 'health_context',
+  display_name: 'Contexto de salud',
+  summary: 'Dolor, limitaciones y recuperación, sin historia clínica.',
+  description:
+    'Lo que declares sobre dolor, limitaciones y recuperación. No incluye diagnósticos ni documentos médicos.',
+  default_purpose: 'Adaptar tu entrenamiento a lo que tu cuerpo admite hoy.',
+}
+
 let readers: CatalogReader[] = []
 
 function catalog(overrides: Partial<GlobalCatalogService> = {}): GlobalCatalogService {
@@ -58,6 +67,10 @@ function catalog(overrides: Partial<GlobalCatalogService> = {}): GlobalCatalogSe
     listActivityTypeResultContracts: async (reader) => {
       readers.push(reader)
       return [binding]
+    },
+    listInformationCategories: async (reader) => {
+      readers.push(reader)
+      return [category]
     },
     ...overrides,
   }
@@ -113,7 +126,9 @@ describe('Global catalogue surface', () => {
   test('T-CAT-API-13 mounts every global catalogue operation with its contract method', () => {
     const contract = allfitV1ContractManifest.operations
       .filter((operation) =>
-        ['OP-CAT-007', 'OP-CAT-008', 'OP-CAT-012'].includes(operation.allfitOperation ?? ''),
+        ['OP-CAT-007', 'OP-CAT-008', 'OP-CAT-012', 'OP-PRV-022'].includes(
+          operation.allfitOperation ?? '',
+        ),
       )
       .map((operation) => `${operation.method} ${colonPath(operation.path)}`)
       .sort()
@@ -122,7 +137,7 @@ describe('Global catalogue surface', () => {
       .map((route) => `${route.method} /catalog/v1${route.path}`)
       .sort()
 
-    expect(contract).toHaveLength(3)
+    expect(contract).toHaveLength(4)
     expect(mounted).toEqual(contract)
   })
 
@@ -133,6 +148,7 @@ describe('Global catalogue surface', () => {
       .filter((route) => route.method !== 'ALL')
       .map((route) => `${route.method} ${route.path}`)
 
+    expect(mounted).toContain('GET /catalog/v1/information-categories')
     expect(mounted).toContain('GET /catalog/v1/disciplines')
     expect(mounted).toContain('GET /catalog/v1/activity-types')
     expect(mounted).toContain('GET /catalog/v1/activity-types/:activityTypeId/result-contracts')
@@ -285,5 +301,58 @@ describe('Global catalogue surface', () => {
       }),
     )
     expect(backoffice.headers.get('access-control-allow-origin')).toBe(BACKOFFICE_ORIGIN)
+  })
+
+  /*
+   * `OP-PRV-022`, `HU-STUDIO-034`. The wording a member reads to know what they
+   * may ask a client for. It lives on this surface and not on `/studio/v1`
+   * because the person being asked reads the same seven rows to decide.
+   */
+  test('T-CAT-API-25 serves the information categories to a member of a gym', async () => {
+    const response = await routes().fetch(request('/information-categories'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    await expect(response.json()).resolves.toEqual({ items: [category] })
+    expect(readers).toEqual([{ personId: PERSON_ID, actorKind: 'person' }])
+  })
+
+  /*
+   * The half of criterion 1 that is easy to drop. A category that says only what
+   * it covers lets somebody tick "body progress" believing it reaches injuries,
+   * so the description carrying its own limit travels with the summary rather
+   * than instead of it.
+   */
+  test('T-CAT-API-26 answers both the one-line summary and the limit of each category', async () => {
+    const response = await routes().fetch(request('/information-categories'))
+    const body = (await response.json()) as { items: (typeof category)[] }
+
+    expect(body.items[0]?.summary).not.toBeNull()
+    expect(body.items[0]?.description).toContain('No incluye')
+  })
+
+  /*
+   * A support actor reaching this route is refused by the closed function, which
+   * is the honest answer: the row-level policy on the wording admits `person`
+   * alone, so an empty list would read as "there are no categories" — a wrong
+   * answer wearing the shape of a right one.
+   */
+  test('T-CAT-API-27 refuses a support actor instead of answering an empty list', async () => {
+    const forbidden = Object.assign(new Error('active person required'), { code: '42501' })
+    const response = await routes(
+      catalog({
+        listInformationCategories: async () => {
+          throw forbidden
+        },
+      }),
+    ).fetch(
+      request('/information-categories', {
+        origin: BACKOFFICE_ORIGIN,
+        cookie: `${BACKOFFICE_SESSION_COOKIE}=session-secret`,
+      }),
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.not.toEqual({ items: [] })
   })
 })

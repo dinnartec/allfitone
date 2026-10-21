@@ -8,6 +8,7 @@ import type {
   CatalogueTerm,
   GlobalCatalogDatabase,
   CatalogCommandResult,
+  CatalogInformationCategory,
   Movement,
   MovementDetail,
   MovementLibraryDatabase,
@@ -94,6 +95,7 @@ export interface GlobalCatalogService {
     reader: CatalogReader,
     activityTypeId: string,
   ): Promise<ActivityTypeResultContract[]>
+  listInformationCategories(reader: CatalogReader): Promise<CatalogInformationCategory[]>
 }
 
 export function createGlobalCatalogService(database: GlobalCatalogDatabase): GlobalCatalogService {
@@ -102,6 +104,7 @@ export function createGlobalCatalogService(database: GlobalCatalogDatabase): Glo
     listActivityTypes: (reader) => database.listActivityTypes(reader),
     listActivityTypeResultContracts: (reader, activityTypeId) =>
       database.listActivityTypeResultContracts(reader, activityTypeId),
+    listInformationCategories: (reader) => database.listInformationCategories(reader),
   }
 }
 

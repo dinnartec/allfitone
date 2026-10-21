@@ -69,6 +69,7 @@ export interface ProfessionalCatalogDatabase {
 export type CatalogDiscipline = AllfitV1Schemas['CatalogDiscipline']
 export type CatalogActivityType = AllfitV1Schemas['CatalogActivityType']
 export type ActivityTypeResultContract = AllfitV1Schemas['ActivityTypeResultContract']
+export type CatalogInformationCategory = AllfitV1Schemas['CatalogInformationCategory']
 
 export interface CatalogReader {
   personId: string
@@ -82,6 +83,12 @@ export interface GlobalCatalogDatabase {
     reader: CatalogReader,
     activityTypeId: string,
   ): Promise<ActivityTypeResultContract[]>
+  /**
+   * `OP-PRV-022`. The only catalogue read that a support actor may not make:
+   * the row-level policy on the wording admits `person` alone, so the closed
+   * function refuses rather than answering an empty list.
+   */
+  listInformationCategories(reader: CatalogReader): Promise<CatalogInformationCategory[]>
 }
 
 export interface Movement {
