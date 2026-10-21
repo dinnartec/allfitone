@@ -15,6 +15,7 @@ export default {
         'worker',
         'studio-web',
         'backoffice-web',
+        'space-web',
         'space',
         // packages
         'auth-provider',

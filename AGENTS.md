@@ -48,9 +48,9 @@ apply to the database — see [Database](#8-database).
 Do not conflate these:
 
 - **Repository** — where code lives. One monorepo.
-- **Deployable** — what ships as a unit. Five of them.
+- **Deployable** — what ships as a unit. Six of them.
 
-One repository producing five deployables is the normal case, not a compromise.
+One repository producing six deployables is the normal case, not a compromise.
 
 | Deployable       | Source                | How it ships                    |
 | ---------------- | --------------------- | ------------------------------- |
@@ -58,6 +58,7 @@ One repository producing five deployables is the normal case, not a compromise.
 | `worker`         | `apps/worker`         | Cron-invoked consumers          |
 | `studio-web`     | `apps/studio-web`     | Web build                       |
 | `backoffice-web` | `apps/backoffice-web` | Web build                       |
+| `space-web`      | `apps/space-web`      | Static web build                |
 | `space`          | `apps/space`          | EAS Build to app stores         |
 
 ### One backend, four surfaces
@@ -82,6 +83,7 @@ apps/
   worker/         Outbox consumers and scheduled jobs
   studio-web/     Client of /studio/v1
   backoffice-web/ Client of /backoffice/v1
+  space-web/      Public Allfit Space landing, no API
   space/          Expo · client of /space/v1
 packages/
   auth-provider/  Port and adapter for the identity provider

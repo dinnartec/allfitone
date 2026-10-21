@@ -166,17 +166,19 @@ and install commands on their detected defaults; the root `bun.lock` and
 | ---------------------- | --------------------- | ----------------------- |
 | `allfitone-studio`     | `apps/studio-web`     | `studio.allfit.one`     |
 | `allfitone-backoffice` | `apps/backoffice-web` | `backoffice.allfit.one` |
+| `allfitone-space`      | `apps/space-web`      | `space.allfit.one`      |
 
-For both projects:
+For all three projects:
 
 - Set the production branch to `main`.
-- Set `NEXT_PUBLIC_API_URL=https://api.allfit.one` for Production.
+- Set `NEXT_PUBLIC_API_URL=https://api.allfit.one` for Production in Studio and
+  Backoffice. The Space landing calls no API and needs no variables.
 - Enable **Include source files outside of the Root Directory** so workspace
   packages remain available.
 - Keep Vercel's **Skip deployments when there are no changes** optimization
   enabled; Turbo determines whether the selected workspace is affected.
 
-Reserve `allfit.one` for the public product or marketing site. Point the two app
+Reserve `allfit.one` for the public product or marketing site. Point the three app
 subdomains to their Vercel projects after adding them under **Settings →
 Domains**. The API project must use `API_PUBLIC_URL=https://api.allfit.one`,
 `STUDIO_WEB_URL=https://studio.allfit.one`, and

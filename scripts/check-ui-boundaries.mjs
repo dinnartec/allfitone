@@ -4,7 +4,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { ESLint } from 'eslint'
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const appRoots = ['apps/studio-web/src', 'apps/backoffice-web/src']
+const appRoots = ['apps/studio-web/src', 'apps/backoffice-web/src', 'apps/space-web/src']
 const forbiddenStyleExtensions = new Set([
   '.css',
   '.less',
@@ -29,7 +29,7 @@ const directInteractiveSelectorPattern =
 function isProductCompositionStylesheet(repositoryPath) {
   // Product-specific page composition may consume published tokens and primitives;
   // reusable primitives, assets and arbitrary component styles remain forbidden.
-  return /^apps\/(?:studio-web|backoffice-web)\/src\/app\/[a-z0-9-]+\.composition\.css$/.test(
+  return /^apps\/(?:studio-web|backoffice-web|space-web)\/src\/app\/[a-z0-9-]+\.composition\.css$/.test(
     repositoryPath,
   )
 }
@@ -191,5 +191,5 @@ if (violations.length > 0) {
   }
   process.exitCode = 1
 } else {
-  console.log('Studio and Backoffice UI boundaries are valid.')
+  console.log('Product web app UI boundaries are valid.')
 }

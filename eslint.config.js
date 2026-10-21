@@ -50,7 +50,7 @@ const NO_STORE_BILLING_SDK = {
 
 // Product web apps consume visual decisions only through the React platform
 // package. Foundations and implementation libraries remain private to the DS.
-const UI_APPS = ['studio-web', 'backoffice-web']
+const UI_APPS = ['studio-web', 'backoffice-web', 'space-web']
 
 function jsxAttribute(node, name) {
   return node.attributes.find(
@@ -211,7 +211,7 @@ const NO_DIRECT_UI = {
     '@tailwindcss/*',
     'tw-animate-css',
   ],
-  message: 'Studio and Backoffice use explicit @allfitone/react subpaths only.',
+  message: 'Product web apps use explicit @allfitone/react subpaths only.',
 }
 
 const NO_LOCAL_UI = {
@@ -231,11 +231,11 @@ const NO_HOSTING = {
 // An app never imports another app. Shared code goes to packages/, and
 // duplicated logic across apps is exactly what this prevents.
 //
-// Generated per app so each one blocks the OTHER four and never itself: a
+// Generated per app so each one blocks the OTHER five and never itself: a
 // blanket pattern would reject a legitimate `./space/...` inside apps/space.
 // Both spellings are covered — the workspace name and a relative path that
 // traverses into a sibling app.
-const APPS = ['api', 'worker', 'studio-web', 'backoffice-web', 'space']
+const APPS = ['api', 'worker', 'studio-web', 'backoffice-web', 'space-web', 'space']
 
 const noOtherApps = (self) => ({
   group: APPS.filter((a) => a !== self).flatMap((a) => [
@@ -454,7 +454,7 @@ export default tseslint.config(
         },
         {
           selector: "JSXAttribute[name.name='style']",
-          message: 'Inline visual styles are forbidden in Studio and Backoffice.',
+          message: 'Inline visual styles are forbidden in product web apps.',
         },
         {
           selector: "JSXAttribute[name.name='className'] > Literal",

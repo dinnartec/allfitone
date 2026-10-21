@@ -1,0 +1,30 @@
+{
+  "format": "allfitone-brand-assets",
+  "schemaVersion": 1,
+  "brandVersion": "0.4.0",
+  "managedFiles": [
+    "README.md",
+    "manifest.json",
+    "logo/allfit-one-logo-cyan.svg",
+    "logo/allfit-one-logo-ink.svg",
+    "logo/allfit-one-logo-chalk.svg",
+    "wordmark/allfit-one-wordmark-on-light.svg",
+    "wordmark/allfit-one-wordmark-on-dark.svg",
+    "lockup/allfit-one-lockup-on-light.svg",
+    "lockup/allfit-one-lockup-on-dark.svg",
+    "favicon/allfit-one-favicon-ink.svg",
+    "favicon/allfit-one-favicon-cyan.svg",
+    "product/space/allfit-space-wordmark-on-dark.svg",
+    "product/space/allfit-space-lockup-on-dark.svg",
+    "product/space/allfit-space-wordmark-on-light.svg",
+    "product/space/allfit-space-lockup-on-light.svg",
+    "product/studio/allfit-studio-wordmark-on-dark.svg",
+    "product/studio/allfit-studio-lockup-on-dark.svg",
+    "product/studio/allfit-studio-wordmark-on-light.svg",
+    "product/studio/allfit-studio-lockup-on-light.svg",
+    "product/backoffice/allfit-backoffice-wordmark-on-dark.svg",
+    "product/backoffice/allfit-backoffice-lockup-on-dark.svg",
+    "product/backoffice/allfit-backoffice-wordmark-on-light.svg",
+    "product/backoffice/allfit-backoffice-lockup-on-light.svg"
+  ]
+}
