@@ -1408,3 +1408,348 @@
   color: var(--afo-color-text-muted);
   font-size: var(--afo-font-size-sm);
 }
+
+/* ---------------------------------------------------------- access landing */
+
+/* What a signed-out visitor sees first. It sits inside AccessShell, which owns
+   the surface and the header; everything below the header is laid out here, on
+   the header's own frame (80rem, with its 20/32/48px insets) so the edges line up. */
+[data-studio-landing],
+[data-studio-landing-footer] {
+  --studio-landing-inset: var(--afo-space-5);
+
+  box-sizing: border-box;
+  width: min(100%, 80rem);
+  margin-inline: auto;
+  padding-inline: var(--studio-landing-inset);
+}
+
+@media (min-width: 40rem) {
+  [data-studio-landing],
+  [data-studio-landing-footer] {
+    --studio-landing-inset: var(--afo-space-8);
+  }
+}
+
+[data-studio-landing] {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--afo-space-20), 10vw, var(--afo-space-32));
+  /* The consent panel opens at the top centre, so the heading and the way in
+     start below the band it can cover. */
+  padding-block: clamp(var(--afo-space-16), 14vh, var(--afo-space-24)) var(--afo-space-24);
+}
+
+[data-studio-landing-body] {
+  color: var(--afo-color-text-muted);
+  line-height: var(--afo-line-height-body);
+}
+
+[data-studio-landing-lead] {
+  max-width: 36rem;
+  color: var(--afo-color-text-secondary);
+  font-size: var(--afo-font-size-lg);
+  line-height: var(--afo-line-height-relaxed);
+}
+
+[data-studio-landing-note] {
+  max-width: 30rem;
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+  line-height: var(--afo-line-height-body);
+}
+
+/* ------------------------------------------------------------------- hero */
+
+[data-studio-landing-hero] {
+  display: grid;
+  gap: var(--afo-space-12);
+  align-items: center;
+}
+
+[data-studio-landing-intro] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--afo-space-6);
+  min-width: 0;
+}
+
+[data-studio-landing-title] {
+  max-width: 14ch;
+  font-family: var(--afo-font-family-display);
+  font-size: clamp(var(--afo-font-size-5xl), 7vw, var(--afo-font-size-8xl));
+  font-weight: var(--afo-font-weight-bold);
+  line-height: var(--afo-line-height-display-tight);
+  letter-spacing: var(--afo-letter-spacing-display);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+[data-studio-landing-actions] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--afo-space-4);
+}
+
+/* ------------------------------------------------- plan against logged */
+
+[data-studio-landing-preview] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--afo-space-5);
+  min-width: 0;
+  padding: clamp(var(--afo-space-5), 3vw, var(--afo-space-8));
+  border: 1px solid var(--afo-color-border-strong);
+  border-radius: var(--afo-radius-panel);
+  background: var(--afo-color-ink-panel);
+  box-shadow: var(--afo-shadow-workspace);
+  color: var(--afo-color-neutral-white);
+}
+
+[data-studio-preview-head] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--afo-space-1);
+}
+
+[data-studio-preview-client] {
+  font-family: var(--afo-font-family-display);
+  font-size: var(--afo-font-size-3xl);
+  font-weight: var(--afo-font-weight-semibold);
+  line-height: var(--afo-line-height-display);
+  text-transform: uppercase;
+}
+
+[data-studio-preview-program],
+[data-studio-preview-shared] {
+  color: var(--afo-color-neutral-steel);
+  font-size: var(--afo-font-size-sm);
+}
+
+[data-studio-preview-shared] {
+  display: flex;
+  align-items: center;
+  gap: var(--afo-space-2);
+  padding-block-end: var(--afo-space-5);
+  border-block-end: 1px solid color-mix(in srgb, var(--afo-color-neutral-white) 14%, transparent);
+}
+
+[data-studio-preview-shared] svg {
+  flex: none;
+  color: var(--afo-color-brand-primary);
+}
+
+[data-studio-preview-grid] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: var(--afo-space-6);
+}
+
+[data-studio-preview-column] {
+  padding-block-end: var(--afo-space-2);
+  color: var(--afo-color-neutral-steel);
+  font-size: var(--afo-font-size-xs);
+  font-weight: var(--afo-font-weight-semibold);
+}
+
+[data-studio-preview-column]:not(:first-child) {
+  text-align: end;
+}
+
+[data-studio-preview-row] {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding-block: var(--afo-space-3);
+  border-block-start: 1px solid color-mix(in srgb, var(--afo-color-neutral-white) 10%, transparent);
+}
+
+[data-studio-preview-exercise] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--afo-space-1);
+  font-weight: var(--afo-font-weight-semibold);
+}
+
+/* A difference between plan and record is the reason this view exists, so it is the only accent. */
+[data-studio-preview-change] {
+  color: var(--afo-color-brand-primary);
+  font-size: var(--afo-font-size-xs);
+  font-weight: var(--afo-font-weight-bold);
+}
+
+[data-studio-preview-value] {
+  color: var(--afo-color-neutral-steel);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+[data-studio-preview-value][data-changed] {
+  color: var(--afo-color-brand-primary);
+  font-weight: var(--afo-font-weight-bold);
+}
+
+/* --------------------------------------------------------------- sections */
+
+[data-studio-landing-section] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--afo-space-10);
+}
+
+[data-studio-landing-heading] {
+  font-family: var(--afo-font-family-display);
+  font-size: clamp(var(--afo-font-size-4xl), 5vw, var(--afo-font-size-6xl));
+  font-weight: var(--afo-font-weight-bold);
+  line-height: var(--afo-line-height-display);
+  letter-spacing: var(--afo-letter-spacing-display);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+[data-studio-landing-principles] {
+  display: grid;
+  border-block-start: 1px solid var(--afo-color-border-subtle);
+}
+
+[data-studio-landing-principle] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--afo-space-3);
+  padding-block: var(--afo-space-8);
+  border-block-end: 1px solid var(--afo-color-border-subtle);
+}
+
+[data-studio-landing-principle-title] {
+  font-family: var(--afo-font-family-display);
+  font-size: clamp(var(--afo-font-size-2xl), 2.6vw, var(--afo-font-size-3xl));
+  font-weight: var(--afo-font-weight-semibold);
+  line-height: var(--afo-line-height-display);
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- modules */
+
+[data-studio-landing-modules] {
+  display: flex;
+  flex-direction: column;
+  border-block-start: 1px solid var(--afo-color-border-subtle);
+}
+
+[data-studio-landing-module] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--afo-space-1) var(--afo-space-4);
+  padding-block: var(--afo-space-4);
+  border-block-end: 1px solid var(--afo-color-border-subtle);
+}
+
+[data-studio-landing-module-icon] {
+  display: inline-flex;
+  grid-row: span 2;
+  align-items: center;
+  justify-content: center;
+  width: var(--afo-space-10);
+  height: var(--afo-space-10);
+  border-radius: var(--afo-radius-md);
+  background: var(--afo-color-accent-tonal);
+  color: var(--afo-color-icon-accent);
+}
+
+[data-studio-landing-module-name] {
+  font-weight: var(--afo-font-weight-bold);
+}
+
+[data-studio-landing-upcoming] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--afo-space-2) var(--afo-space-3);
+  color: var(--afo-color-text-muted);
+  font-size: var(--afo-font-size-sm);
+}
+
+[data-studio-landing-upcoming-label] {
+  color: var(--afo-color-text-accent);
+  font-weight: var(--afo-font-weight-bold);
+}
+
+/* ---------------------------------------------------------------- closing */
+
+[data-studio-landing-closing] {
+  display: grid;
+  gap: var(--afo-space-8);
+  padding-block-start: var(--afo-space-12);
+  border-block-start: 1px solid var(--afo-color-border-subtle);
+}
+
+[data-studio-landing-closing-body] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--afo-space-5);
+}
+
+/* ----------------------------------------------------------------- footer */
+
+[data-studio-landing-footer] {
+  /* Ends clear of the floating privacy control. */
+  padding-block-end: var(--studio-floating-control-space);
+}
+
+/* The rule sits on the row, not the footer, so it spans the content and not the inset. */
+[data-studio-landing-footer-row] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--afo-space-4) var(--afo-space-8);
+  padding-block-start: var(--afo-space-8);
+  border-block-start: 1px solid var(--afo-color-border-subtle);
+  font-size: var(--afo-font-size-sm);
+}
+
+[data-studio-landing-footer-brand] {
+  display: inline-flex;
+}
+
+[data-studio-landing-footer-brand]:focus-visible {
+  outline: 2px solid var(--afo-color-focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--afo-radius-sm);
+}
+
+@media (min-width: 48rem) {
+  [data-studio-landing-principles] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--afo-space-12);
+  }
+
+  [data-studio-landing-module] {
+    grid-template-columns: auto 12rem minmax(0, 1fr);
+  }
+
+  [data-studio-landing-module-icon] {
+    grid-row: auto;
+  }
+}
+
+@media (min-width: 64rem) {
+  [data-studio-landing],
+  [data-studio-landing-footer] {
+    --studio-landing-inset: var(--afo-space-12);
+  }
+
+  [data-studio-landing-hero] {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    column-gap: var(--afo-space-16);
+  }
+
+  [data-studio-landing-closing] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
