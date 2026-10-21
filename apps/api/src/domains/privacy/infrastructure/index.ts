@@ -11,6 +11,8 @@ import type postgres from 'postgres'
 import { database } from '../../../platform/db/index.js'
 import { measureRequestPhase } from '../../../platform/observability/index.js'
 import type {
+  MyConsent,
+  MyConsentDatabase,
   OfferableScope,
   OfferableScopeDatabase,
   AccessEvent,
@@ -201,4 +203,87 @@ export function createOfferableScopeDatabase(
         return [...result.rows]
       }),
   }
+}
+
+type ConsentRow = Omit<
+  MyConsent,
+  'started_at' | 'ended_at' | 'decided_at' | 'granted_at' | 'frozen_at' | 'revoked_at'
+> & {
+  started_at: Date
+  ended_at: Date | null
+  decided_at: Date
+  granted_at: Date | null
+  frozen_at: Date | null
+  revoked_at: Date | null
+}
+
+const instant = (value: Date | null): string | null => (value ? value.toISOString() : null)
+
+/**
+ * PostgreSQL access for what the person shares (`OP-PRV-013`, `OP-PRV-005`).
+ *
+ * Runs as the person: both functions answer that actor and nobody else, so a
+ * transaction that skipped the ritual is refused rather than served.
+ */
+export function createMyConsentDatabase(
+  sql: ReturnType<typeof database> = database(),
+): MyConsentDatabase {
+  return {
+    listMine: (personId) =>
+      measureRequestPhase('business-db', async () => {
+        const result = await sql.begin(async (transaction) => {
+          await asPerson(transaction, personId)
+          return {
+            rows: await transaction<ConsentRow[]>`
+              select * from privacy.list_my_consents(${personId}::uuid)
+            `,
+          }
+        })
+        return result.rows.map((row) => ({
+          ...row,
+          started_at: row.started_at.toISOString(),
+          ended_at: instant(row.ended_at),
+          decided_at: row.decided_at.toISOString(),
+          granted_at: instant(row.granted_at),
+          frozen_at: instant(row.frozen_at),
+          revoked_at: instant(row.revoked_at),
+        }))
+      }),
+
+    revoke: (command) =>
+      measureRequestPhase('business-db', async () => {
+        const result = await sql.begin(async (transaction) => {
+          await asPerson(transaction, command.personId)
+          const [row] = await transaction<
+            { grant_id: string; status: string; revoked_at: Date | null; replayed: boolean }[]
+          >`
+            select * from privacy.revoke_my_grant(
+              ${command.personId}::uuid, ${command.grantId}::uuid,
+              ${command.idempotencyKey}::uuid, ${command.commandId}::uuid,
+              ${Buffer.from(command.requestHash)}::bytea
+            )
+          `
+          return { row }
+        })
+        const { row } = result
+        if (!row || row.status !== 'revoked' || !row.revoked_at) {
+          throw new Error('PostgreSQL did not confirm the revocation')
+        }
+        return {
+          resource: {
+            grantId: row.grant_id,
+            status: 'revoked' as const,
+            revokedAt: row.revoked_at.toISOString(),
+          },
+          replayed: row.replayed,
+        }
+      }),
+  }
+}
+
+async function asPerson(transaction: postgres.TransactionSql, personId: string): Promise<void> {
+  await transaction`
+    select set_config('app.actor_kind', 'person', true),
+           set_config('app.actor_person_id', ${personId}, true)
+  `
 }

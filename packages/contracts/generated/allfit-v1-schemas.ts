@@ -9045,6 +9045,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           'substitution_ended',
           'consent_decided',
           'relationship_ended',
+          'grant_revoked',
         ],
       },
       occurred_at: {
@@ -9063,7 +9064,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       detail: {
         type: 'object',
         description:
-          'Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`.',
+          'Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`; `grant_revoked` carries `scope_code`.',
         additionalProperties: true,
       },
     },
@@ -10385,6 +10386,123 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       measured_on: {
         type: 'string',
         format: 'date',
+      },
+    },
+  },
+  SpaceConsent: {
+    description:
+      'One category one gym asked her for. `decision` is her answer; the grant fields are set only when she said yes. `presented_snapshot` is what the gym showed her, title included.',
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'relationship_id',
+      'organization_id',
+      'organization_name',
+      'relationship_status',
+      'started_at',
+      'ended_at',
+      'scope_code',
+      'presented_snapshot',
+      'decision',
+      'decided_at',
+      'grant_id',
+      'grant_status',
+      'access_level',
+      'granted_at',
+      'frozen_at',
+      'revoked_at',
+    ],
+    properties: {
+      relationship_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      organization_name: {
+        type: 'string',
+      },
+      relationship_status: {
+        type: 'string',
+        enum: ['active', 'terminated'],
+      },
+      started_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      ended_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      scope_code: {
+        $ref: '#/components/schemas/ScopeCode',
+      },
+      presented_snapshot: {
+        type: 'object',
+        additionalProperties: true,
+      },
+      decision: {
+        type: 'string',
+        enum: ['accepted', 'rejected'],
+      },
+      decided_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      grant_id: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/Uuid',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      grant_status: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/GrantStatus',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      access_level: {
+        anyOf: [
+          {
+            $ref: '#/components/schemas/AccessLevel',
+          },
+          {
+            type: 'null',
+          },
+        ],
+      },
+      granted_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      frozen_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+      revoked_at: {
+        type: ['string', 'null'],
+        format: 'date-time',
+      },
+    },
+  },
+  SpaceConsentList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/SpaceConsent',
+        },
       },
     },
   },

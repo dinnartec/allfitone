@@ -8420,13 +8420,49 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /space/v1/consents:
+    get:
+      tags: [Space Privacy]
+      operationId: listMySpaceConsents
+      x-allfit-operation: OP-PRV-013
+      x-allfit-cache: no-store
+      summary: What the caller shares, gym by gym and category by category
+      description: >-
+        One row per relationship and category she was asked for: the answer she gave
+        and, where she said yes, how that grant stands now — active, frozen by an
+        ended relationship, or revoked by her. Only her own; nobody else's is ever
+        listed.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Her consents, grouped by relationship
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpaceConsentList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /space/v1/consents/{grantId}/revocation:
     post:
       tags: [Space Privacy]
       operationId: revokeConsentGrant
       x-allfit-operation: OP-PRV-005
       x-allfit-cache: no-store
-      summary: Revoke a live or frozen grant and invalidate projections atomically
+      summary: Revoke a live or frozen grant
+      description: >-
+        Only that grant; the others and her own data stay as they were (ADR-012). A
+        revoked grant never comes back: sharing again takes a new consent. Somebody
+        else's grant reads as one that does not exist, and a grant already revoked by
+        another command is a conflict.
       security:
         - bearerAuth: []
       parameters:
@@ -17631,6 +17667,7 @@ components:
             - substitution_ended
             - consent_decided
             - relationship_ended
+            - grant_revoked
         occurred_at:
           type: string
           format: date-time
@@ -17650,7 +17687,7 @@ components:
             carries `scope_code`, `decision` and `scope_definition_id`;
             `relationship_ended` carries `ended_by_kind`, `declared_by_us` and
             `reason`; `relationship_started` carries
-            `continues_relationship_id`.
+            `continues_relationship_id`; `grant_revoked` carries `scope_code`.
           additionalProperties: true
 
     RelationshipHistoryPage:
@@ -19679,6 +19716,74 @@ components:
           type: integer
           minimum: 1
 
+    SpaceConsent:
+      description: >-
+        One category one gym asked her for. `decision` is her answer; the grant
+        fields are set only when she said yes. `presented_snapshot` is what the gym
+        showed her, title included.
+      type: object
+      additionalProperties: false
+      required:
+        [relationship_id, organization_id, organization_name, relationship_status,
+         started_at, ended_at, scope_code, presented_snapshot, decision, decided_at,
+         grant_id, grant_status, access_level, granted_at, frozen_at, revoked_at]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_id:
+          $ref: '#/components/schemas/UuidV7'
+        organization_name:
+          type: string
+        relationship_status:
+          type: string
+          enum: [active, terminated]
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: [string, 'null']
+          format: date-time
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        presented_snapshot:
+          type: object
+          additionalProperties: true
+        decision:
+          type: string
+          enum: [accepted, rejected]
+        decided_at:
+          type: string
+          format: date-time
+        grant_id:
+          anyOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        grant_status:
+          anyOf:
+            - $ref: '#/components/schemas/GrantStatus'
+            - type: 'null'
+        access_level:
+          anyOf:
+            - $ref: '#/components/schemas/AccessLevel'
+            - type: 'null'
+        granted_at:
+          type: [string, 'null']
+          format: date-time
+        frozen_at:
+          type: [string, 'null']
+          format: date-time
+        revoked_at:
+          type: [string, 'null']
+          format: date-time
+    SpaceConsentList:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpaceConsent'
     ConsentRevocation:
       type: object
       additionalProperties: false

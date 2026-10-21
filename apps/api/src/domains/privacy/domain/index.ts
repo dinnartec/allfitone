@@ -153,3 +153,29 @@ export type OfferableScope = AllfitV1Schemas['OfferableScope']
 export interface OfferableScopeDatabase {
   listOfferable(input: { actorPersonId: string; requestId: string }): Promise<OfferableScope[]>
 }
+
+/**
+ * One category a gym asked her for (`OP-PRV-013`): her answer and, where she said
+ * yes, how that grant stands now. The wire shape, because nothing here reshapes it.
+ */
+export type MyConsent = AllfitV1Schemas['SpaceConsent']
+
+export interface GrantRevocation {
+  grantId: string
+  status: 'revoked'
+  revokedAt: string
+}
+
+// Declared here, not borrowed from another domain: see the note in relationships.
+export interface MyConsentCommand {
+  personId: string
+  grantId: string
+  idempotencyKey: string
+  commandId: string
+  requestHash: Uint8Array
+}
+
+export interface MyConsentDatabase {
+  listMine(personId: string): Promise<MyConsent[]>
+  revoke(command: MyConsentCommand): Promise<{ resource: GrantRevocation; replayed: boolean }>
+}
