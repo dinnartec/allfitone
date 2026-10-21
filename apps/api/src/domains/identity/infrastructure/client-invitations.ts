@@ -14,6 +14,7 @@ import type {
   AccessLevel,
   ClientInvitationDatabase,
   ClientInvitationIntentStatus,
+  ClientInvitationPresentation,
   ClientInvitationStatus,
   ConsentDecision,
   ScopeCode,
@@ -49,6 +50,16 @@ type PresentationRow = {
   expires_at: Date
   invitation_intent_id: string
   scope_options: ScopeOptionRow[]
+  invited_by: string | null
+}
+
+type PendingRow = {
+  invitation_id: string
+  invitation_intent_id: string
+  organization_id: string
+  organization_name: string
+  invited_by: string | null
+  expires_at: Date
 }
 
 type DecisionRow = {
@@ -128,26 +139,44 @@ export function createClientInvitationDatabase(): ClientInvitationDatabase {
         return resolved
       })
 
-      if (!row) return undefined
-      return {
+      return row ? presentInvitation(row) : undefined
+    },
+
+    async listMine(input) {
+      const rows = await sql.begin(async (transaction) => {
+        // An account still registering has no person: it is asked as the account.
+        await transaction`
+          select set_config('app.actor_kind', ${input.personId ? 'person' : 'account'}, true),
+                 set_config('app.actor_person_id', ${input.personId ?? ''}, true),
+                 set_config('app.actor_verified_email', ${input.verifiedEmail.trim().toLowerCase()}, true)
+        `
+        return transaction<PendingRow[]>`
+          select * from identity.list_my_client_invitations()
+        `
+      })
+      return rows.map((row) => ({
         id: row.invitation_id,
         intentId: row.invitation_intent_id,
-        status: row.status,
-        organization: {
-          id: row.organization_id,
-          displayName: row.organization_display_name,
-          responsibleParty: row.responsible_party,
-        },
+        organizationId: row.organization_id,
+        organizationName: row.organization_name,
+        invitedBy: row.invited_by,
         expiresAt: new Date(row.expires_at),
-        scopeOptions: (row.scope_options ?? []).map((option) => ({
-          scopeCode: option.scope_code,
-          offeredAccessLevel: option.offered_access_level,
-          purpose: option.purpose,
-          presentedSnapshotSchemaVersion: option.presented_snapshot_schema_version,
-          presentedSnapshot: option.presented_snapshot,
-          decision: option.decision,
-        })),
-      }
+      }))
+    },
+
+    async readMine(input) {
+      const row = await sql.begin(async (transaction) => {
+        await transaction`
+          select set_config('app.actor_kind', 'person', true),
+                 set_config('app.actor_person_id', ${input.personId}, true),
+                 set_config('app.actor_verified_email', ${input.verifiedEmail.trim().toLowerCase()}, true)
+        `
+        const [read] = await transaction<PresentationRow[]>`
+          select * from identity.read_my_client_invitation(${input.invitationId}::uuid)
+        `
+        return read
+      })
+      return row ? presentInvitation(row) : undefined
     },
 
     async decide(input) {
@@ -158,18 +187,24 @@ export function createClientInvitationDatabase(): ClientInvitationDatabase {
                  set_config('app.actor_verified_email', ${input.verifiedEmail.trim().toLowerCase()}, true),
                  set_config('app.request_id', ${input.commandId}, true)
         `
-        const [decided] = await transaction<DecisionRow[]>`
-          select * from identity.decide_client_invitation(
-            ${input.personId}::uuid,
-            ${input.tokenHash},
-            ${input.intentId}::uuid,
-            ${input.relationshipDecision},
-            ${JSON.stringify(input.scopeDecisions)}::text::jsonb,
-            ${input.idempotencyKey}::uuid,
-            ${input.commandId}::uuid,
-            ${input.requestHash}
-          )
-        `
+        const decisions = JSON.stringify(input.scopeDecisions)
+        // The emailed token, or one of her pending invitations by id: same rules either way.
+        const [decided] =
+          'tokenHash' in input.invitation
+            ? await transaction<DecisionRow[]>`
+                select * from identity.decide_client_invitation(
+                  ${input.personId}::uuid, ${input.invitation.tokenHash}, ${input.intentId}::uuid,
+                  ${input.relationshipDecision}, ${decisions}::text::jsonb,
+                  ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+                )
+              `
+            : await transaction<DecisionRow[]>`
+                select * from identity.decide_my_client_invitation(
+                  ${input.personId}::uuid, ${input.invitation.invitationId}::uuid,
+                  ${input.intentId}::uuid, ${input.relationshipDecision}, ${decisions}::text::jsonb,
+                  ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+                )
+              `
         return decided
       })
 
@@ -187,5 +222,28 @@ export function createClientInvitationDatabase(): ClientInvitationDatabase {
         replayed: row.replayed,
       }
     },
+  }
+}
+
+function presentInvitation(row: PresentationRow): ClientInvitationPresentation {
+  return {
+    id: row.invitation_id,
+    intentId: row.invitation_intent_id,
+    status: row.status,
+    organization: {
+      id: row.organization_id,
+      displayName: row.organization_display_name,
+      responsibleParty: row.responsible_party,
+    },
+    expiresAt: new Date(row.expires_at),
+    invitedBy: row.invited_by,
+    scopeOptions: (row.scope_options ?? []).map((option) => ({
+      scopeCode: option.scope_code,
+      offeredAccessLevel: option.offered_access_level,
+      purpose: option.purpose,
+      presentedSnapshotSchemaVersion: option.presented_snapshot_schema_version,
+      presentedSnapshot: option.presented_snapshot,
+      decision: option.decision,
+    })),
   }
 }

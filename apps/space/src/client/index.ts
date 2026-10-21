@@ -40,7 +40,7 @@ export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
 export type SessionRefreshed = AllfitV1Schemas['SpaceSessionRefreshed']
 
 export { ApiError, type ApiFailure } from './api-error'
-import { ApiError, type ApiFailure } from './api-error'
+import { ApiError, failureFor } from './api-error'
 
 /** The port the API listens on. Only the host varies between simulator and device. */
 const API_PORT = 8080
@@ -118,15 +118,6 @@ async function post<T>(
   if (!response.ok) throw new ApiError(failureFor(response.status))
 
   return (await readJsonBody<T>(response)) as T
-}
-
-function failureFor(status: number): ApiFailure {
-  if (status === 400) return 'invalid-request'
-  if (status === 401) return 'unauthenticated'
-  if (status === 404) return 'not-found'
-  if (status === 409) return 'conflict'
-  if (status === 422) return 'validation-failed'
-  return 'unavailable'
 }
 
 export function register(email: string, password: string): Promise<RegistrationAccepted> {

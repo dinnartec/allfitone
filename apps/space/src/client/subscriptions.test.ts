@@ -35,6 +35,7 @@ function relationship(overrides: Partial<MyRelationship> = {}): MyRelationship {
     started_at: '2026-07-01T14:00:00.000Z',
     ended_at: null,
     previous_relationship_id: null,
+    holder_name: null,
     ...overrides,
   }
 }

@@ -13,6 +13,7 @@ import {
   trustedStudioWebUrl,
 } from '../../identity/index.js'
 import { fail } from '../../../platform/http/index.js'
+import { presentHistory } from './history-page.js'
 import { parseSubstitutionCursor, presentSubstitutionPage } from './substitution-page.js'
 import {
   clientDirectoryService,
@@ -37,12 +38,7 @@ import {
   type SubstitutionListService,
   type RelationshipTerminationService,
 } from '../application/index.js'
-import type {
-  DirectoryEntry,
-  DirectoryGroup,
-  RelationshipHistory,
-  RelationshipState,
-} from '../domain/index.js'
+import type { DirectoryEntry, DirectoryGroup, RelationshipState } from '../domain/index.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -693,26 +689,6 @@ function presentEntry(entry: DirectoryEntry): Record<string, unknown> {
  * plain date: a substitution ends on a day in the gym's calendar, not at an
  * instant, and turning it into a timestamp would invent a timezone.
  */
-/*
- * `{ data, page }`, like every other paginated response here. The relationship's
- * own id is in the path the caller used, so repeating it in the body would be a
- * second source for the same fact.
- */
-function presentHistory(history: RelationshipHistory): Record<string, unknown> {
-  return {
-    data: history.events.map((event) => ({
-      type: event.type,
-      occurred_at: event.occurredAt.toISOString(),
-      source_id: event.sourceId,
-      detail: event.detail,
-    })),
-    page: {
-      next_cursor: history.nextCursor,
-      has_more: history.hasMore,
-    },
-  }
-}
-
 function presentState(state: RelationshipState): Record<string, unknown> {
   return {
     relationship_id: state.relationshipId,

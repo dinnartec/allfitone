@@ -83,6 +83,7 @@ import {
 } from '../../src/client/week-plan'
 import { elapsedLabel } from '../../src/client/session-form'
 import { HistoryGroupHeader, HistoryPanel, HistoryRow } from '../../src/components/history-row'
+import { PendingInvitationCard } from '../../src/components/gym-ui'
 import { HomeCard } from '../../src/components/home-card'
 import { OfferRow } from '../../src/components/offer-row'
 import { PHOTO_COVER } from '../../src/client/routine-cover'
@@ -377,6 +378,10 @@ export default function Today() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Above everything: only she can answer it, and it expires. */}
+        {/* Without a programme the list starts flush under the greeting, so it gets air. */}
+        <PendingInvitationCard style={assigned ? null : styles.invitation} />
+
         {/* `FIN-2b`. El carrusel es la semana: una tarjeta por sesión, con la portada
             que su programa le puso, y la de hoy marcada. Sustituye al titular único de
             la sesión de hoy, que dejaba el resto de la semana sin enseñar. */}
@@ -979,6 +984,7 @@ const styles = StyleSheet.create({
   greeting: { flex: 1, gap: 4 },
   bell: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   heading: { gap: 8 },
+  invitation: { marginTop: 16 },
   // The photograph carries the space above it, so the session sits well down the frame.
   session: { gap: 8, paddingTop: 124 },
   sessionTitle: { lineHeight: 44 },

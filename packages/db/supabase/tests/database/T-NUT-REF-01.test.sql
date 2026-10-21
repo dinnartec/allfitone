@@ -17,7 +17,9 @@ values ('019ef800-0000-7000-8000-000000000001', 'Quien', 'Gana'),
        ('019ef800-0000-7000-8000-000000000002', 'Sin', 'Peso'),
        ('019ef800-0000-7000-8000-000000000003', 'La', 'Vecina');
 
--- The references a curator would load: muscle and fat loss, per kilo.
+-- The references a curator would load: muscle and fat loss, per kilo. Whatever curation
+-- already loaded is set aside, so the figures below are the only ones in play.
+delete from nutrition.goal_references;
 insert into nutrition.goal_references
   (goal_code, nutrient_code, mode, minimum_per_kg, maximum_per_kg, exact_per_kg)
 values

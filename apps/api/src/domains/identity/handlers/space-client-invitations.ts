@@ -24,7 +24,11 @@ import type {
   SpaceInvitationIdentity,
 } from '../application/client-invitations.js'
 import { clientInvitationService, spaceActorResolver } from '../dependencies.js'
-import type { ConsentDecision, ScopeCode } from '../domain/client-invitations.js'
+import type {
+  ClientInvitationPresentation,
+  ConsentDecision,
+  ScopeCode,
+} from '../domain/client-invitations.js'
 
 export type TokenVerifier = (token: string) => Promise<VerifiedToken>
 export type SpaceIdentityResolver = (subject: string) => Promise<SpaceInvitationIdentity>
@@ -77,25 +81,47 @@ export function spaceClientInvitationRoutes(
         token: body.token,
         requestId: c.req.header('command-id') ?? crypto.randomUUID(),
       })
+      return c.json(presentInvitation(invitation))
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  /*
+   * Her pending invitations, by the email her provider verified — the same key the
+   * decision requires. Somebody still registering may ask: it is how she learns one is
+   * waiting at the end.
+   */
+  routes.get('/client-invitations', async (c) => {
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+    try {
+      const identity = await identityFor(token.subject)
+      const pending = await invitations().listMine(identity)
       return c.json({
-        id: invitation.id,
-        invitation_intent_id: invitation.intentId,
-        status: invitation.status,
-        organization: {
-          id: invitation.organization.id,
-          display_name: invitation.organization.displayName,
-          responsible_party: invitation.organization.responsibleParty,
-        },
-        expires_at: invitation.expiresAt.toISOString(),
-        scope_options: invitation.scopeOptions.map((option) => ({
-          scope_code: option.scopeCode,
-          offered_access_level: option.offeredAccessLevel,
-          purpose: option.purpose,
-          presented_snapshot_schema_version: option.presentedSnapshotSchemaVersion,
-          presented_snapshot: option.presentedSnapshot,
-          decision: option.decision,
+        data: pending.map((invitation) => ({
+          id: invitation.id,
+          invitation_intent_id: invitation.intentId,
+          organization_id: invitation.organizationId,
+          organization_name: invitation.organizationName,
+          invited_by: invitation.invitedBy,
+          expires_at: invitation.expiresAt.toISOString(),
         })),
       })
+    } catch (error) {
+      return operationFailure(c, error)
+    }
+  })
+
+  /* One of her pending invitations, by id, under the same recipient test as the link. */
+  routes.get('/client-invitations/:invitationId', async (c) => {
+    const invitationId = c.req.param('invitationId')
+    if (!UUID.test(invitationId)) return fail(c, 'invalid-request')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+    try {
+      const identity = await identityFor(token.subject)
+      return c.json(presentInvitation(await invitations().readMine(identity, { invitationId })))
     } catch (error) {
       return operationFailure(c, error)
     }
@@ -117,7 +143,7 @@ export function spaceClientInvitationRoutes(
     try {
       const identity = await identityFor(token.subject)
       const result = await invitations().decide(identity, {
-        token: body.token,
+        ...('token' in body ? { token: body.token } : { invitationId: body.invitation_id }),
         intentId: body.invitation_intent_id,
         relationshipDecision: body.relationship_decision,
         scopeDecisions: body.scope_decisions ?? {},
@@ -210,21 +236,35 @@ function isTokenBody(value: unknown): value is { token: string } {
   )
 }
 
-function isDecisionBody(value: unknown): value is {
-  token: string
+function isDecisionBody(value: unknown): value is (
+  { token: string } | { invitation_id: string }
+) & {
   invitation_intent_id: string
   relationship_decision: ConsentDecision
   scope_decisions?: Record<string, ConsentDecision>
 } {
   if (!isObject(value)) return false
-  const keys = Object.keys(value).sort().join(',')
+  // The invitation is named by the token or by its id, never both.
+  const named = ['token', 'invitation_id'].filter((key) => key in value)
+  if (named.length !== 1) return false
+  const keys = Object.keys(value)
+    .filter((key) => key !== 'token' && key !== 'invitation_id')
+    .sort()
+    .join(',')
   if (
-    keys !== 'invitation_intent_id,relationship_decision,token' &&
-    keys !== 'invitation_intent_id,relationship_decision,scope_decisions,token'
+    keys !== 'invitation_intent_id,relationship_decision' &&
+    keys !== 'invitation_intent_id,relationship_decision,scope_decisions'
   ) {
     return false
   }
-  if (typeof value.token !== 'string' || !TOKEN.test(value.token)) return false
+  if ('token' in value && (typeof value.token !== 'string' || !TOKEN.test(value.token)))
+    return false
+  if (
+    'invitation_id' in value &&
+    (typeof value.invitation_id !== 'string' || !UUID.test(value.invitation_id))
+  ) {
+    return false
+  }
   if (typeof value.invitation_intent_id !== 'string' || !UUID.test(value.invitation_intent_id)) {
     return false
   }
@@ -234,6 +274,29 @@ function isDecisionBody(value: unknown): value is {
   return Object.entries(value.scope_decisions).every(
     ([code, decision]) => SCOPE_CODES.has(code as ScopeCode) && isDecision(decision),
   )
+}
+
+function presentInvitation(invitation: ClientInvitationPresentation) {
+  return {
+    id: invitation.id,
+    invitation_intent_id: invitation.intentId,
+    status: invitation.status,
+    invited_by: invitation.invitedBy,
+    organization: {
+      id: invitation.organization.id,
+      display_name: invitation.organization.displayName,
+      responsible_party: invitation.organization.responsibleParty,
+    },
+    expires_at: invitation.expiresAt.toISOString(),
+    scope_options: invitation.scopeOptions.map((option) => ({
+      scope_code: option.scopeCode,
+      offered_access_level: option.offeredAccessLevel,
+      purpose: option.purpose,
+      presented_snapshot_schema_version: option.presentedSnapshotSchemaVersion,
+      presented_snapshot: option.presentedSnapshot,
+      decision: option.decision,
+    })),
+  }
 }
 
 function isDecision(value: unknown): value is ConsentDecision {

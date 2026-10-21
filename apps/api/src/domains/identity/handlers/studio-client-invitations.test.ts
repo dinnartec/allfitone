@@ -68,6 +68,12 @@ function invitations(overrides: Partial<ClientInvitationService> = {}): ClientIn
     resolve: async () => {
       throw new Error('not used here')
     },
+    listMine: async () => {
+      throw new Error('not used here')
+    },
+    readMine: async () => {
+      throw new Error('not used here')
+    },
     decide: async () => {
       throw new Error('not used here')
     },

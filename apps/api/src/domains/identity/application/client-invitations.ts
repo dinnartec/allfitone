@@ -22,6 +22,7 @@ import {
 import type { AccountActor, CommandContext } from '../domain/index.js'
 import type {
   ClientInvitationDatabase,
+  ClientInvitationPending,
   ClientInvitationPresentation,
   ClientInvitationScopeRequest,
   ConsentDecision,
@@ -50,14 +51,24 @@ export interface ClientInvitationService {
     input: { token: string; requestId: string },
   ): Promise<ClientInvitationPresentation>
 
+  /** Her pending invitations, by verified email; she may still be registering. */
+  listMine(identity: SpaceInvitationIdentity): Promise<ClientInvitationPending[]>
+
+  /** One of her pending invitations, read by id under the same recipient test. */
+  readMine(
+    identity: SpaceInvitationIdentity,
+    input: { invitationId: string },
+  ): Promise<ClientInvitationPresentation>
+
   decide(
     identity: SpaceInvitationIdentity,
-    input: CommandContext & {
-      token: string
-      intentId: string
-      relationshipDecision: ConsentDecision
-      scopeDecisions: Record<string, ConsentDecision>
-    },
+    input: CommandContext &
+      /** The emailed token, or the id of one of her pending invitations. */
+      ({ token: string } | { invitationId: string }) & {
+        intentId: string
+        relationshipDecision: ConsentDecision
+        scopeDecisions: Record<string, ConsentDecision>
+      },
   ): ReturnType<ClientInvitationDatabase['decide']>
 }
 
@@ -95,12 +106,31 @@ export function createClientInvitationService(
       return invitation
     },
 
+    async listMine(identity) {
+      if (!identity.verifiedEmail) throw new StudioInvitationError('forbidden')
+      return database.listMine({
+        personId: identity.personId,
+        verifiedEmail: identity.verifiedEmail,
+      })
+    },
+
+    async readMine(identity, input) {
+      const caller = requireVerifiedCaller(identity)
+      const invitation = await database.readMine({ ...caller, invitationId: input.invitationId })
+      if (!invitation) throw new StudioInvitationError('not-found')
+      return invitation
+    },
+
     decide(identity, input) {
       const caller = requireVerifiedCaller(identity)
+      const invitation =
+        'token' in input
+          ? { tokenHash: hashInvitationToken(input.token) }
+          : { invitationId: input.invitationId }
       return database.decide({
         personId: caller.personId,
         verifiedEmail: caller.verifiedEmail,
-        tokenHash: hashInvitationToken(input.token),
+        invitation,
         intentId: input.intentId,
         relationshipDecision: input.relationshipDecision,
         scopeDecisions: input.scopeDecisions,

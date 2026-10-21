@@ -16,6 +16,7 @@ import { Hono, type Context } from 'hono'
 
 import { authProvider } from '../../../platform/auth/index.js'
 import { fail } from '../../../platform/http/index.js'
+import { presentHistory } from './history-page.js'
 import { parseSubstitutionCursor, presentSubstitutionPage } from './substitution-page.js'
 import {
   SpaceActorError,
@@ -23,11 +24,13 @@ import {
   type SpaceActorResolver,
 } from '../../identity/index.js'
 import {
+  myRelationshipCommandService,
   myRelationshipService,
   substitutionTerminationService,
   substitutionListService,
 } from '../dependencies.js'
 import type {
+  MyRelationshipCommandService,
   MyRelationshipService,
   SubstitutionTerminationService,
   SubstitutionListService,
@@ -45,7 +48,9 @@ export function spaceRelationshipRoutes(
   injectedActors?: SpaceActorResolver,
   injectedTerminations?: SubstitutionTerminationService,
   injectedSubstitutionPages?: SubstitutionListService,
+  injectedMine?: MyRelationshipCommandService,
 ): Hono {
+  const mine = () => injectedMine ?? myRelationshipCommandService()
   const relationships = () => injectedService ?? myRelationshipService()
   const terminations = () => injectedTerminations ?? substitutionTerminationService()
   const substitutionPages = () => injectedSubstitutionPages ?? substitutionListService()
@@ -116,6 +121,109 @@ export function spaceRelationshipRoutes(
         ...(cursor ?? {}),
       })
       return c.json(presentSubstitutionPage(page))
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  /*
+   * `OP-REL-014` from her side: the same timeline the gym reads, for her own
+   * relationship only. Each side reads the termination reason it declared.
+   */
+  routes.get('/relationships/:relationshipId/events', async (c) => {
+    c.header('Cache-Control', 'private, no-store')
+
+    const relationshipId = c.req.param('relationshipId')
+    if (!UUID.test(relationshipId)) return fail(c, 'invalid-request')
+    const rawLimit = c.req.query('limit')
+    if (rawLimit !== undefined && !/^[0-9]{1,3}$/.test(rawLimit)) return fail(c, 'invalid-request')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const history = await mine().readHistory(personId, {
+        relationshipId,
+        limit: rawLimit === undefined ? null : Number(rawLimit),
+        cursor: c.req.query('cursor') ?? null,
+      })
+      return c.json(presentHistory(history))
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  /*
+   * `OP-REL-005`. A cover runs only once she says yes; a no is kept as a no.
+   */
+  routes.post(
+    '/relationships/:relationshipId/substitutions/:substitutionId/decision',
+    async (c) => {
+      c.header('Cache-Control', 'no-store')
+
+      const relationshipId = c.req.param('relationshipId')
+      const substitutionId = c.req.param('substitutionId')
+      if (!UUID.test(relationshipId) || !UUID.test(substitutionId))
+        return fail(c, 'invalid-request')
+      const body = await readJson(c)
+      const decision = readDecision(body)
+      if (!decision) return fail(c, 'invalid-request')
+      const command = commandContext(c, { relationshipId, substitutionId, decision })
+      if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+      const token = await verified(c, verify)
+      if (!token) return fail(c, 'unauthenticated')
+
+      try {
+        const personId = await actors().personFor(token.subject)
+        const result = await mine().decideSubstitution({
+          personId,
+          relationshipId,
+          assignmentId: substitutionId,
+          decision,
+          ...command,
+        })
+        if (result.replayed) c.header('Idempotent-Replay', 'true')
+        return c.json({
+          assignment_id: result.resource.assignmentId,
+          status: result.resource.status,
+          accepted_by_person_at: result.resource.acceptedByPersonAt,
+        })
+      } catch (cause) {
+        return failure(c, cause)
+      }
+    },
+  )
+
+  /*
+   * `OP-REL-007`. She needs nobody's agreement to leave; everything she shared is
+   * frozen at one instant.
+   */
+  routes.post('/relationships/:relationshipId/termination', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const relationshipId = c.req.param('relationshipId')
+    if (!UUID.test(relationshipId)) return fail(c, 'invalid-request')
+    const body = await readJson(c)
+    const reason = readReason(body)
+    if (reason === undefined) return fail(c, 'invalid-request')
+    const command = commandContext(c, { relationshipId, reason: reason ?? '' })
+    if (!command) return fail(c, 'invalid-request', 'valid command headers are required')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const result = await mine().endRelationship({ personId, relationshipId, reason, ...command })
+      if (result.replayed) c.header('Idempotent-Replay', 'true')
+      return c.json({
+        relationship_id: result.resource.relationshipId,
+        ended_at: result.resource.endedAt,
+        frozen_grants: result.resource.frozenGrants,
+        closed_assignments: result.resource.closedAssignments,
+      })
     } catch (cause) {
       return failure(c, cause)
     }
@@ -198,6 +306,33 @@ async function verified(c: Context, verify: TokenVerifier): Promise<VerifiedToke
   } catch {
     return undefined
   }
+}
+
+async function readJson(c: Context): Promise<unknown> {
+  try {
+    return await c.req.json()
+  } catch {
+    return undefined
+  }
+}
+
+function readDecision(body: unknown): 'accepted' | 'rejected' | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.length !== 1 || keys[0] !== 'decision') return undefined
+  const { decision } = body as { decision: unknown }
+  return decision === 'accepted' || decision === 'rejected' ? decision : undefined
+}
+
+/** Null is no reason given; undefined is a body the command cannot take. */
+function readReason(body: unknown): string | null | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const keys = Object.keys(body)
+  if (keys.some((key) => key !== 'reason')) return undefined
+  const { reason } = body as { reason?: unknown }
+  if (reason === undefined) return null
+  if (typeof reason !== 'string' || reason.trim() === '' || reason.length > 2000) return undefined
+  return reason.trim()
 }
 
 function parseLimit(value: string | undefined): number | undefined {

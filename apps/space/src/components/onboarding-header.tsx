@@ -19,6 +19,9 @@
  * screen — which centres its content vertically — pushed the bar to the middle of
  * the screen.
  *
+ * On the first step only, a gym whose invitation is waiting says so (INV-2): she
+ * finishes her own profile first, and decides on the gym at the end.
+ *
  * **Going back edits.** The two commands behind these screens used to refuse a
  * second write, which would have put this arrow in front of a request that always
  * failed; they now correct instead. The adult declaration is the exception and the
@@ -42,6 +45,7 @@ import Animated, {
 
 import { durationFor, easingFor } from '../client/motion'
 import { stepPosition, type OnboardingStepRoute } from '../client/onboarding-steps'
+import { WaitingGym } from './gym-ui'
 
 const CURRENT_SEGMENT_OPACITY = 0.6
 
@@ -95,43 +99,47 @@ export function OnboardingHeader({ step }: OnboardingHeaderProps) {
   const fillStyle = useAnimatedStyle(() => ({ width: `${grown.get() * 100}%` }))
 
   return (
-    <View style={styles.row}>
-      {previous ? <OnboardingBack to={previous} /> : null}
+    <View style={styles.header}>
+      <View style={styles.row}>
+        {previous ? <OnboardingBack to={previous} /> : null}
 
-      <View
-        style={styles.bar}
-        accessibilityRole="progressbar"
-        accessibilityValue={{ min: 1, max: total, now: completed + 1 }}
-      >
-        {Array.from({ length: total }, (_, index) => {
-          const done = index < completed
-          const current = index === completed
-          return (
-            <View
-              key={index}
-              style={[styles.segment, { backgroundColor: theme.color.border.subtle }]}
-            >
-              {done || current ? (
-                <Animated.View
-                  style={[
-                    styles.fill,
-                    {
-                      backgroundColor: theme.color.border.accent,
-                      opacity: current && !done ? CURRENT_SEGMENT_OPACITY : 1,
-                    },
-                    index === completed ? fillStyle : styles.filled,
-                  ]}
-                />
-              ) : null}
-            </View>
-          )
-        })}
+        <View
+          style={styles.bar}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 1, max: total, now: completed + 1 }}
+        >
+          {Array.from({ length: total }, (_, index) => {
+            const done = index < completed
+            const current = index === completed
+            return (
+              <View
+                key={index}
+                style={[styles.segment, { backgroundColor: theme.color.border.subtle }]}
+              >
+                {done || current ? (
+                  <Animated.View
+                    style={[
+                      styles.fill,
+                      {
+                        backgroundColor: theme.color.border.accent,
+                        opacity: current && !done ? CURRENT_SEGMENT_OPACITY : 1,
+                      },
+                      index === completed ? fillStyle : styles.filled,
+                    ]}
+                  />
+                ) : null}
+              </View>
+            )
+          })}
+        </View>
       </View>
+      {completed === 0 ? <WaitingGym /> : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  header: { gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 44 },
   back: { width: 28, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
   bar: { flex: 1, flexDirection: 'row', gap: 6 },
