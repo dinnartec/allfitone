@@ -7,17 +7,17 @@ import type { LocaleParams } from '@/lib/route'
 import { isLocale } from '@/lib/locale'
 import { alternates } from '@/lib/site'
 
-const PATH = '/privacidad'
+const PATH = '/terms'
 
 export async function generateMetadata({ params }: LocaleParams): Promise<Metadata> {
   const { lang } = await params
   if (!isLocale(lang)) return {}
-  return { title: dictionaryFor(lang).meta.privacyTitle, alternates: alternates(lang, PATH) }
+  return { title: dictionaryFor(lang).meta.termsTitle, alternates: alternates(lang, PATH) }
 }
 
-export default async function Privacy({ params }: LocaleParams) {
+export default async function Terms({ params }: LocaleParams) {
   const { lang } = await params
   if (!isLocale(lang)) notFound()
   const copy = dictionaryFor(lang)
-  return <LegalPage locale={lang} copy={copy} document={copy.legal.privacy} path={PATH} />
+  return <LegalPage locale={lang} copy={copy} document={copy.legal.terms} path={PATH} />
 }

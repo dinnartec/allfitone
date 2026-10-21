@@ -34,10 +34,10 @@ export function Footer({ locale, copy }: { locale: Locale; copy: Dictionary }) {
         />
         <ul className="footer__links">
           <li>
-            <Link href={`/${locale}/terminos`}>{copy.footer.terms}</Link>
+            <Link href={`/${locale}/terms`}>{copy.footer.terms}</Link>
           </li>
           <li>
-            <Link href={`/${locale}/privacidad`}>{copy.footer.privacy}</Link>
+            <Link href={`/${locale}/privacy`}>{copy.footer.privacy}</Link>
           </li>
           {outside.map((link) => (
             <li key={link.label}>

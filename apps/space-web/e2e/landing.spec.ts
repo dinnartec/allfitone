@@ -16,10 +16,10 @@ const VIEWPORTS = [
 const PAGES = [
   { path: '/es', heading: /ENTRENA/ },
   { path: '/en', heading: /TRAIN/ },
-  { path: '/es/privacidad', heading: /Política de tratamiento/ },
-  { path: '/en/privacidad', heading: /Personal data processing/ },
-  { path: '/es/terminos', heading: /Términos y condiciones/ },
-  { path: '/en/terminos', heading: /Terms and conditions/ },
+  { path: '/es/privacy', heading: /Política de tratamiento/ },
+  { path: '/en/privacy', heading: /Personal data processing/ },
+  { path: '/es/terms', heading: /Términos y condiciones/ },
+  { path: '/en/terms', heading: /Terms and conditions/ },
 ]
 
 test.describe('language', () => {
@@ -42,8 +42,8 @@ test.describe('language', () => {
   test('a page without a language keeps its path', async ({ browser }) => {
     const context = await browser.newContext({ locale: 'es-CO' })
     const page = await context.newPage()
-    await page.goto('/privacidad')
-    await expect(page).toHaveURL(/\/es\/privacidad$/)
+    await page.goto('/privacy')
+    await expect(page).toHaveURL(/\/es\/privacy$/)
     await context.close()
   })
 
@@ -53,9 +53,9 @@ test.describe('language', () => {
   })
 
   test('the switch keeps the visitor on the same page', async ({ page }) => {
-    await page.goto('/es/terminos')
+    await page.goto('/es/terms')
     await page.getByRole('link', { name: 'EN', exact: true }).click()
-    await expect(page).toHaveURL(/\/en\/terminos$/)
+    await expect(page).toHaveURL(/\/en\/terms$/)
   })
 })
 
@@ -66,7 +66,7 @@ test('the stores read as coming soon while there is no link', async ({ page }) =
 })
 
 test('the legal pages say they are drafts', async ({ page }) => {
-  await page.goto('/es/privacidad')
+  await page.goto('/es/privacy')
   await expect(page.getByText('Versión preliminar')).toBeVisible()
 })
 
