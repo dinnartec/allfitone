@@ -40,6 +40,7 @@ const EVENT_ICON: Record<string, IconName> = {
   substitution_ended: 'people',
   consent_decided: 'permissions',
   relationship_ended: 'close',
+  grant_revoked: 'locked',
 }
 
 export default function RelationshipHistory() {

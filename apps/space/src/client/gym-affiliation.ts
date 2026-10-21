@@ -145,6 +145,10 @@ export function historyLine(event: {
         ? `Compartiste ${scope}`
         : `No compartiste ${scope}`
     }
+    case 'grant_revoked': {
+      const named = SCOPE_NAME[String(event.detail.scope_code)]
+      return `Dejaste de compartir ${named ? named.charAt(0).toLowerCase() + named.slice(1) : 'una categoría'}`
+    }
     case 'relationship_ended':
       // Seen from Space, «declared by us» is her own decision.
       return event.detail.declared_by_us === true
