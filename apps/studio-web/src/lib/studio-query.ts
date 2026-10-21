@@ -9,6 +9,7 @@ import {
   StudioApiError,
   studioApi,
   type ClientDirectoryGroup,
+  type InformationCategoryList,
   type OfferableScopeCatalog,
   type ClientDirectoryItem,
   type ClientDirectoryPage,
@@ -54,6 +55,7 @@ export const studioQueryKeys = {
   organizationMemberships: (organizationId: string, status: MembershipFilter, limit: number) =>
     [...ROOT_KEY, 'organization', organizationId, 'memberships', { status, limit }] as const,
   offerableScopes: () => [...ROOT_KEY, 'offerable-scopes'] as const,
+  informationCategories: () => [...ROOT_KEY, 'information-categories'] as const,
   organizationClientsRoot: (organizationId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'clients'] as const,
   organizationClients: (organizationId: string, status: ClientFilter, limit: number) =>
@@ -368,6 +370,20 @@ export function offerableScopesQueryOptions() {
   return queryOptions({
     queryKey: studioQueryKeys.offerableScopes(),
     queryFn: ({ signal }): Promise<OfferableScopeCatalog> => studioApi.offerableScopes(signal),
+    staleTime: STUDIO_ROLE_STALE_TIME_MS,
+  })
+}
+
+/**
+ * The wording of the seven categories. It carries no version and nobody
+ * publishes it, so it is as stale-tolerant as the role catalogue: the only way
+ * it changes is a migration.
+ */
+export function informationCategoriesQueryOptions() {
+  return queryOptions({
+    queryKey: studioQueryKeys.informationCategories(),
+    queryFn: ({ signal }): Promise<InformationCategoryList> =>
+      studioApi.informationCategories(signal),
     staleTime: STUDIO_ROLE_STALE_TIME_MS,
   })
 }

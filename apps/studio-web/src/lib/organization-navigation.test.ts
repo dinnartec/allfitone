@@ -62,4 +62,28 @@ describe('organization workspace navigation', () => {
       title: 'Clientes',
     })
   })
+
+  test('resolves the information categories title', () => {
+    expect(
+      resolveWorkspaceRoute(`${basePath}/clients/information-categories`, organizationId),
+    ).toEqual({ title: 'Categorías de información' })
+  })
+
+  /*
+   * The relationship route is a bare `[^/]+` under `/clients`, so every static
+   * route added beside it has to be excluded by name or it inherits "Vínculo".
+   * This asserts both halves: the static one keeps its own title, and a real
+   * relationship id still reaches the pattern.
+   */
+  test('a static route under clients is not mistaken for a relationship', () => {
+    const relationshipId = '01991600-3000-7000-8000-000000000001'
+    expect(resolveWorkspaceRoute(`${basePath}/clients/${relationshipId}`, organizationId)).toEqual({
+      title: 'Vínculo',
+    })
+    for (const segment of ['invitations', 'information-categories']) {
+      expect(resolveWorkspaceRoute(`${basePath}/clients/${segment}`, organizationId)).not.toEqual({
+        title: 'Vínculo',
+      })
+    }
+  })
 })

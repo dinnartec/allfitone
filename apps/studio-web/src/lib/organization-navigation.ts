@@ -40,12 +40,21 @@ export function resolveWorkspaceRoute(
   if (pathname === `${basePath}/clients/invitations/new`) {
     return { title: 'Invitar cliente' }
   }
+  if (pathname === `${basePath}/clients/information-categories`) {
+    return { title: 'Categorías de información' }
+  }
   /*
    * "Vínculo" because that is the word the directory already uses for this
    * thing — "Vínculo desde", "vínculos finalizados". The segment cannot be
-   * `invitations`, which is a path and not a relationship id.
+   * `invitations` or `information-categories`, which are paths and not
+   * relationship ids; both are excluded here as well as matched above, because
+   * a static route added below this one would otherwise be titled "Vínculo".
    */
-  if (/^\/organizations\/[^/]+\/clients\/(?!invitations$)[^/]+$/.test(pathname)) {
+  if (
+    /^\/organizations\/[^/]+\/clients\/(?!invitations$|information-categories$)[^/]+$/.test(
+      pathname,
+    )
+  ) {
     return { title: 'Vínculo' }
   }
   // "Cobros" and not "Pagos": Allfit reflects the state of a payment and never processes

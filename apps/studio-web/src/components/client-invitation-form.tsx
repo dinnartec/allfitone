@@ -1,6 +1,6 @@
 'use client'
 
-import { Alert, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/react/components/alert'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Badge } from '@allfitone/react/components/badge'
 import {
@@ -252,8 +252,21 @@ export function ClientInvitationForm() {
               <Alert variant="warning">
                 <AlertTitle>Todavía no hay permisos publicados</AlertTitle>
                 <AlertDescription>
-                  No se puede invitar hasta que se publique el catálogo de permisos.
+                  No se puede invitar hasta que se publique el catálogo de permisos. Mientras tanto
+                  sí puedes consultar qué abarca cada categoría de información.
                 </AlertDescription>
+                {/* La referencia no depende del catálogo publicado, así que es
+                    lo único útil que ofrecer desde aquí mientras nadie lo cure. */}
+                <AlertAction>
+                  <Link
+                    href={`/organizations/${current.organization_id}/clients/information-categories`}
+                    data-slot="button"
+                    data-variant="outline"
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    Ver las categorías de información
+                  </Link>
+                </AlertAction>
               </Alert>
             ) : (
               catalog.map((scope) => (

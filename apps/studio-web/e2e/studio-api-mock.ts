@@ -56,6 +56,7 @@ export interface StudioApiFixture {
   subscriptionOutcome: 'applied' | 'no-cause' | 'forbidden'
   roleGrantOutcome: 'granted' | 'rejected' | 'forbidden'
   offerableScopes: unknown[]
+  informationCategories: unknown[]
   organization: unknown
   organizationRoles: unknown[]
   organizationTypes: unknown[]
@@ -131,6 +132,77 @@ export const terminatedMembership = {
  * The permission vocabulary, as Backoffice publishes it. Three of the seven, so
  * the picker has enough to show a list without the screen becoming a wall.
  */
+/*
+ * `OP-PRV-022`. Copied from what `privacy.list_information_categories()`
+ * answers against a real database — the seven rows, their exact wording, the
+ * five keys the contract declares and the order the function returns them in.
+ * Not derived from `offerableScopeCatalog`: that one carries a definition id
+ * and a version this operation deliberately does not have, and a fixture that
+ * is merely plausible hides the defect it was written to catch.
+ */
+export const informationCategoryCatalog = [
+  {
+    scope_code: 'relationship_training',
+    display_name: 'Entrenamiento con nosotros',
+    summary: 'Sesiones que le asignes y sus resultados, nada de lo que entrene por su cuenta.',
+    description:
+      'Las sesiones que te asignemos y sus resultados, solo las que ocurran dentro de esta relación. No incluye lo que entrenes por tu cuenta, ni tu cuerpo, ni tu salud.',
+    default_purpose:
+      'Prescribir tu entrenamiento y revisar cómo te va en las sesiones que te asignamos.',
+  },
+  {
+    scope_code: 'prior_training_history',
+    display_name: 'Tu historial de entrenamiento',
+    summary: 'Entrenamientos anteriores y por su cuenta, sin cuerpo ni salud.',
+    description:
+      'Entrenamientos anteriores y por tu cuenta, y sus resultados. No incluye lo que hayas compartido con otras organizaciones, ni tu cuerpo, ni tu salud.',
+    default_purpose:
+      'Conocer tu punto de partida para no proponerte algo por encima o por debajo de lo que ya haces.',
+  },
+  {
+    scope_code: 'body_progress',
+    display_name: 'Progreso corporal',
+    summary: 'Medidas y las fotos que elija, sin datos de salud.',
+    description:
+      'Medidas, composición corporal, tendencias y las fotos que tú selecciones. No incluye tu galería, ni la ubicación de las fotos, ni datos de salud.',
+    default_purpose:
+      'Seguir cómo cambia tu cuerpo y ajustar el plan a lo que muestren las medidas.',
+  },
+  {
+    scope_code: 'health_context',
+    display_name: 'Contexto de salud',
+    summary: 'Dolores y lesiones que declare, sin historia clínica.',
+    description:
+      'Dolores, lesiones o limitaciones que tú declares, y tu recuperación. No incluye historia clínica, exámenes, medicamentos ni diagnósticos.',
+    default_purpose: 'Adaptar los ejercicios a tus lesiones o limitaciones para no hacerte daño.',
+  },
+  {
+    scope_code: 'nutrition_intake',
+    display_name: 'Lo que comes',
+    summary: 'Las comidas que registre. Nunca podrás editarlas.',
+    description:
+      'Las comidas que registres y lo que contienen. Solo las creas tú: un profesional nunca registra ni corrige una comida tuya.',
+    default_purpose: 'Entender tu alimentación para acompañarte con objetivos realistas.',
+  },
+  {
+    scope_code: 'nutrition_media',
+    display_name: 'Fotos de tus comidas',
+    summary: 'Las fotos de sus comidas. Requiere también ver lo que come.',
+    description:
+      'Las fotos que adjuntes a una comida. Requiere además que nos permitas ver lo que comes; por sí sola no muestra nada.',
+    default_purpose:
+      'Ver las fotos de tus comidas cuando el registro escrito no alcanza para entenderlas.',
+  },
+  {
+    scope_code: 'nutrition_guidance',
+    display_name: 'Objetivos nutricionales',
+    summary: 'Objetivos de nutrición y sus decisiones, sin ver sus comidas.',
+    description:
+      'Los objetivos de nutrición que te propongamos y las decisiones que tomes sobre ellos. No incluye tus comidas ni sus fotos, y nunca es prescripción médica.',
+    default_purpose: 'Proponerte objetivos de nutrición y revisar contigo si te sirven.',
+  },
+] as const
+
 export const offerableScopeCatalog = [
   {
     scope_definition_id: '01991600-7000-7000-8000-000000000301',
@@ -675,6 +747,7 @@ export function createStudioApiFixture(
     subscriptionOutcome: 'applied',
     roleGrantOutcome: 'granted',
     offerableScopes: [...offerableScopeCatalog],
+    informationCategories: [...informationCategoryCatalog],
     /*
      * A copy, not the shared object. Sites are now editable, and the mock
      * writes the change into this fixture so the screen the form returns to
@@ -725,7 +798,13 @@ export async function installStudioApiMock(
       )
     })
   }
-  await page.route(`${API_ORIGIN}/studio/v1/**`, async (route) => {
+  /*
+   * Studio reads two surfaces, not one. `/catalog/v1` is the tenant-less
+   * catalogue that Space and Backoffice read as well, and leaving it
+   * unintercepted let a request escape to a server that is not running — which
+   * the screen could only report as a failed load.
+   */
+  const handle = async (route: Route) => {
     const request = toMockRequest(route.request())
     if (request.method === 'OPTIONS') {
       await fulfill(route, { status: 204 })
@@ -741,7 +820,10 @@ export async function installStudioApiMock(
 
     const response = defaultResponse(request, fixture)
     await fulfill(route, response ?? { status: 500, body: { error: { code: 'unmocked-route' } } })
-  })
+  }
+
+  await page.route(`${API_ORIGIN}/studio/v1/**`, handle)
+  await page.route(`${API_ORIGIN}/catalog/v1/**`, handle)
 }
 
 function defaultResponse(
@@ -805,6 +887,10 @@ function defaultResponse(
   }
   if (request.method === 'GET' && request.path === '/studio/v1/offerable-scopes') {
     return { status: 200, body: { items: fixture.offerableScopes } }
+  }
+  // The catalogue surface, not `/studio/v1`: the wording is shared with Space.
+  if (request.method === 'GET' && request.path === '/catalog/v1/information-categories') {
+    return { status: 200, body: { items: fixture.informationCategories } }
   }
   if (
     request.method === 'POST' &&

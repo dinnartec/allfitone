@@ -156,16 +156,29 @@ export function ClientDirectoryList() {
             : 'Consulta las personas que atiendes y las invitaciones que enviaste.'
         }
         actions={
-          canInvite ? (
+          <>
+            {/* La referencia de categorías no depende del catálogo publicado ni
+                de poder invitar: un coach que solo atiende clientes también
+                necesita saber qué puede consultar de ellos. */}
             <Link
-              href={`/organizations/${current.organization_id}/clients/invitations/new`}
+              href={`/organizations/${current.organization_id}/clients/information-categories`}
               data-slot="button"
-              data-variant="default"
-              className={buttonVariants()}
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline' })}
             >
-              Invitar cliente
+              Categorías de información
             </Link>
-          ) : null
+            {canInvite ? (
+              <Link
+                href={`/organizations/${current.organization_id}/clients/invitations/new`}
+                data-slot="button"
+                data-variant="default"
+                className={buttonVariants()}
+              >
+                Invitar cliente
+              </Link>
+            ) : null}
+          </>
         }
       />
 
