@@ -68,6 +68,10 @@ export function historyEventTitle(event: RelationshipHistoryEvent, personName: s
       return professional ? `Terminó la suplencia de ${professional}` : 'Terminó la suplencia'
     case 'consent_decided':
       return consentTitle(event, personName)
+    case 'grant_revoked': {
+      const scope = detailText(event, 'scope_code')
+      return `${personName} retiró ${scope ? scopeLabel(scope) : 'un permiso'}`
+    }
     case 'relationship_ended':
       return endedTitle(event, personName)
   }

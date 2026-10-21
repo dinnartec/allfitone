@@ -227,7 +227,8 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
             icon="permissions"
             title="Lo que compartes"
             caption="Por gimnasio y categoría"
-            end="soon"
+            end="open"
+            onPress={() => router.push('/sharing')}
           />
           <ProfileRow
             icon="locked"

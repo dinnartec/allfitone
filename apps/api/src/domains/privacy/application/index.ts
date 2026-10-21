@@ -7,6 +7,10 @@
  */
 
 import type {
+  GrantRevocation,
+  MyConsent,
+  MyConsentCommand,
+  MyConsentDatabase,
   OfferableScope,
   OfferableScopeDatabase,
   AccessEventFilters,
@@ -103,5 +107,21 @@ export function createOfferableScopeService(
 ): OfferableScopeService {
   return {
     list: (input) => database.listOfferable(input),
+  }
+}
+
+/*
+ * `OP-PRV-013` and `OP-PRV-005` for the person. Whose grant it is, and whether it
+ * can still be revoked, is decided in PostgreSQL; nothing here second-guesses it.
+ */
+export interface MyConsentService {
+  listMine(personId: string): Promise<MyConsent[]>
+  revoke(command: MyConsentCommand): Promise<{ resource: GrantRevocation; replayed: boolean }>
+}
+
+export function createMyConsentService(database: MyConsentDatabase): MyConsentService {
+  return {
+    listMine: (personId) => database.listMine(personId),
+    revoke: (command) => database.revoke(command),
   }
 }

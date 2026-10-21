@@ -167,3 +167,11 @@ describe('the lines of «Tus gimnasios»', () => {
     ).toBe('Del 4 feb al 3 jun · ya no ven nada nuevo')
   })
 })
+
+describe('the history after taking a category back', () => {
+  test('T-SPC-UNIT-327 the relationship says she stopped sharing it', () => {
+    expect(historyLine({ type: 'grant_revoked', detail: { scope_code: 'nutrition_intake' } })).toBe(
+      'Dejaste de compartir tus comidas',
+    )
+  })
+})

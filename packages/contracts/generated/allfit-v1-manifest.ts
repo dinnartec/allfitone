@@ -643,6 +643,13 @@ export const allfitV1ContractManifest = {
       responses: ['200', '400', '401', '403', '404', '422', '503'],
     },
     {
+      method: 'GET',
+      path: '/space/v1/consents',
+      operationId: 'listMySpaceConsents',
+      allfitOperation: 'OP-PRV-013',
+      responses: ['200', '401', '403', '503'],
+    },
+    {
       method: 'POST',
       path: '/space/v1/consents/{grantId}/revocation',
       operationId: 'revokeConsentGrant',

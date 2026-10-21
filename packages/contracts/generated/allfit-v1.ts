@@ -3387,6 +3387,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/consents': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What the caller shares, gym by gym and category by category
+     * @description One row per relationship and category she was asked for: the answer she gave and, where she said yes, how that grant stands now — active, frozen by an ended relationship, or revoked by her. Only her own; nobody else's is ever listed.
+     */
+    get: operations['listMySpaceConsents']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/consents/{grantId}/revocation': {
     parameters: {
       query?: never
@@ -3396,7 +3416,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** Revoke a live or frozen grant and invalidate projections atomically */
+    /**
+     * Revoke a live or frozen grant
+     * @description Only that grant; the others and her own data stay as they were (ADR-012). A revoked grant never comes back: sharing again takes a new consent. Somebody else's grant reads as one that does not exist, and a grant already revoked by another command is a conflict.
+     */
     post: operations['revokeConsentGrant']
     delete?: never
     options?: never
@@ -6919,11 +6942,12 @@ export interface components {
         | 'substitution_ended'
         | 'consent_decided'
         | 'relationship_ended'
+        | 'grant_revoked'
       /** Format: date-time */
       occurred_at: string
       /** @description The row this moment was read from, not an identifier of the moment. One assignment row produces more than one event, so the same `source_id` appears against different types. */
       source_id: components['schemas']['UuidV7']
-      /** @description Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`. */
+      /** @description Keys vary by `type`. `holder_assigned`, `holder_ended` and the substitution kinds carry `assignment_id`, `membership_id`, `professional_person_id` and `display_name`; `consent_decided` carries `scope_code`, `decision` and `scope_definition_id`; `relationship_ended` carries `ended_by_kind`, `declared_by_us` and `reason`; `relationship_started` carries `continues_relationship_id`; `grant_revoked` carries `scope_code`. */
       detail: {
         [key: string]: unknown
       }
@@ -7932,6 +7956,38 @@ export interface components {
     AppliedScope: {
       code: components['schemas']['ScopeCode']
       version: number
+    }
+    /** @description One category one gym asked her for. `decision` is her answer; the grant fields are set only when she said yes. `presented_snapshot` is what the gym showed her, title included. */
+    SpaceConsent: {
+      relationship_id: components['schemas']['UuidV7']
+      organization_id: components['schemas']['UuidV7']
+      organization_name: string
+      /** @enum {string} */
+      relationship_status: 'active' | 'terminated'
+      /** Format: date-time */
+      started_at: string
+      /** Format: date-time */
+      ended_at: string | null
+      scope_code: components['schemas']['ScopeCode']
+      presented_snapshot: {
+        [key: string]: unknown
+      }
+      /** @enum {string} */
+      decision: 'accepted' | 'rejected'
+      /** Format: date-time */
+      decided_at: string
+      grant_id: components['schemas']['Uuid'] | null
+      grant_status: components['schemas']['GrantStatus'] | null
+      access_level: components['schemas']['AccessLevel'] | null
+      /** Format: date-time */
+      granted_at: string | null
+      /** Format: date-time */
+      frozen_at: string | null
+      /** Format: date-time */
+      revoked_at: string | null
+    }
+    SpaceConsentList: {
+      data: components['schemas']['SpaceConsent'][]
     }
     /**
      * @example {
@@ -16158,6 +16214,30 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['ScopeRequired']
       404: components['responses']['NotFound']
+    }
+  }
+  listMySpaceConsents: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Her consents, grouped by relationship */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpaceConsentList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      503: components['responses']['UpstreamUnavailable']
     }
   }
   revokeConsentGrant: {

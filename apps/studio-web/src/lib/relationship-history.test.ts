@@ -76,6 +76,12 @@ describe('what each moment says', () => {
     ).toBe(`${ANA} retiró su progreso corporal`)
   })
 
+  test('taking a category back reads as withdrawing it, whether the relationship runs or ended', () => {
+    expect(historyEventTitle(event('grant_revoked', { scope_code: 'nutrition_intake' }), ANA)).toBe(
+      `${ANA} retiró lo que come`,
+    )
+  })
+
   /*
    * A scope that is not in the list still has to read as something. A renamed or
    * retired scope must not render an empty sentence in a record that is supposed
