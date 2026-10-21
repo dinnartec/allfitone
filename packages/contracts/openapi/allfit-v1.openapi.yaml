@@ -826,6 +826,44 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+  /catalog/v1/information-categories:
+    get:
+      tags: [Global Catalogue]
+      operationId: listCatalogInformationCategories
+      x-allfit-operation: OP-PRV-022
+      x-allfit-cache: private-no-store
+      summary: List the categories of information a gym can ask a client for
+      description: >-
+        The words for each of the seven categories: what it covers, where it
+        stops, and the purpose a professional may state for asking. A gym member
+        reads it to know what they can ask for; the person being asked reads the
+        same wording to decide, which is why it is served from the tenant-less
+        catalogue rather than copied into Studio and Space.
+
+
+        This is not `OP-PRV-012`. That one answers which resources and fields a
+        published scope version reaches, and says nothing until the catalogue has
+        been curated. This one is the vocabulary: fixed, unversioned, and
+        available from the first day. Refuses a caller that is not an active
+        person rather than answering an empty list.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The seven categories, in the order the product names them
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogInformationCategoryList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
   /catalog/v1/disciplines:
     get:
       tags: [Global Catalogue]
@@ -13710,6 +13748,56 @@ components:
             $ref: '#/components/schemas/PlatformDutyAssignment'
         page:
           $ref: '#/components/schemas/Page'
+    CatalogInformationCategory:
+      type: object
+      additionalProperties: false
+      description: >-
+        The fixed wording of one category of information. It carries no version:
+        this is the product's vocabulary, not a published scope definition, and
+        it must not move under the reader's feet. The lengths match the
+        constraints the database already enforces on the row.
+      required: [scope_code, display_name, description, default_purpose]
+      properties:
+        scope_code:
+          type: string
+          enum:
+            - relationship_training
+            - prior_training_history
+            - body_progress
+            - health_context
+            - nutrition_intake
+            - nutrition_guidance
+            - nutrition_media
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        summary:
+          type: [string, 'null']
+          description: One line for the member deciding whether to ask for it.
+          maxLength: 120
+        description:
+          type: string
+          description: >-
+            What the category covers and, just as importantly, where it stops.
+          minLength: 1
+          maxLength: 500
+        default_purpose:
+          type: string
+          description: >-
+            The purpose a professional may state for asking. Fixed by the
+            catalogue so that no gym writes its own justification.
+          minLength: 1
+          maxLength: 500
+    CatalogInformationCategoryList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogInformationCategory'
     CatalogDiscipline:
       type: object
       additionalProperties: false

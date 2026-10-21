@@ -2372,6 +2372,63 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
     },
   },
+  CatalogInformationCategory: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      "The fixed wording of one category of information. It carries no version: this is the product's vocabulary, not a published scope definition, and it must not move under the reader's feet. The lengths match the constraints the database already enforces on the row.",
+    required: ['scope_code', 'display_name', 'description', 'default_purpose'],
+    properties: {
+      scope_code: {
+        type: 'string',
+        enum: [
+          'relationship_training',
+          'prior_training_history',
+          'body_progress',
+          'health_context',
+          'nutrition_intake',
+          'nutrition_guidance',
+          'nutrition_media',
+        ],
+      },
+      display_name: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 80,
+      },
+      summary: {
+        type: ['string', 'null'],
+        description: 'One line for the member deciding whether to ask for it.',
+        maxLength: 120,
+      },
+      description: {
+        type: 'string',
+        description: 'What the category covers and, just as importantly, where it stops.',
+        minLength: 1,
+        maxLength: 500,
+      },
+      default_purpose: {
+        type: 'string',
+        description:
+          'The purpose a professional may state for asking. Fixed by the catalogue so that no gym writes its own justification.',
+        minLength: 1,
+        maxLength: 500,
+      },
+    },
+  },
+  CatalogInformationCategoryList: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/CatalogInformationCategory',
+        },
+      },
+    },
+  },
   CatalogueActivityTypePublication: {
     type: 'object',
     additionalProperties: false,

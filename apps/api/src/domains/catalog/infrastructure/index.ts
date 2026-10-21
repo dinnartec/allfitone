@@ -11,6 +11,7 @@ import {
   type CatalogActivityType,
   type CatalogCommandResult,
   type CatalogDiscipline,
+  type CatalogInformationCategory,
   type CatalogReader,
   type CatalogueTerm,
   type GlobalCatalogDatabase,
@@ -189,6 +190,14 @@ export function createGlobalCatalogDatabase(): GlobalCatalogDatabase {
         reader,
         (transaction) => transaction<ActivityTypeResultContract[]>`
           select * from catalog.list_activity_type_result_contracts(${activityTypeId}::uuid)
+        `,
+      ),
+
+    listInformationCategories: (reader) =>
+      read<CatalogInformationCategory>(
+        reader,
+        (transaction) => transaction<CatalogInformationCategory[]>`
+          select * from privacy.list_information_categories()
         `,
       ),
   }

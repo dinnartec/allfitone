@@ -271,6 +271,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/catalog/v1/information-categories': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List the categories of information a gym can ask a client for
+     * @description The words for each of the seven categories: what it covers, where it stops, and the purpose a professional may state for asking. A gym member reads it to know what they can ask for; the person being asked reads the same wording to decide, which is why it is served from the tenant-less catalogue rather than copied into Studio and Space.
+     *
+     *     This is not `OP-PRV-012`. That one answers which resources and fields a published scope version reaches, and says nothing until the catalogue has been curated. This one is the vocabulary: fixed, unversioned, and available from the first day. Refuses a caller that is not an active person rather than answering an empty list.
+     */
+    get: operations['listCatalogInformationCategories']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/catalog/v1/disciplines': {
     parameters: {
       query?: never
@@ -5218,6 +5240,28 @@ export interface components {
     PlatformDutyAssignmentPage: {
       data: components['schemas']['PlatformDutyAssignment'][]
       page: components['schemas']['Page']
+    }
+    /** @description The fixed wording of one category of information. It carries no version: this is the product's vocabulary, not a published scope definition, and it must not move under the reader's feet. The lengths match the constraints the database already enforces on the row. */
+    CatalogInformationCategory: {
+      /** @enum {string} */
+      scope_code:
+        | 'relationship_training'
+        | 'prior_training_history'
+        | 'body_progress'
+        | 'health_context'
+        | 'nutrition_intake'
+        | 'nutrition_guidance'
+        | 'nutrition_media'
+      display_name: string
+      /** @description One line for the member deciding whether to ask for it. */
+      summary?: string | null
+      /** @description What the category covers and, just as importantly, where it stops. */
+      description: string
+      /** @description The purpose a professional may state for asking. Fixed by the catalogue so that no gym writes its own justification. */
+      default_purpose: string
+    }
+    CatalogInformationCategoryList: {
+      items: components['schemas']['CatalogInformationCategory'][]
     }
     CatalogDiscipline: {
       code: string
@@ -10614,6 +10658,30 @@ export interface operations {
       409: components['responses']['Conflict']
       415: components['responses']['UnsupportedMediaType']
       422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listCatalogInformationCategories: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The seven categories, in the order the product names them */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CatalogInformationCategoryList']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
     }
   }
