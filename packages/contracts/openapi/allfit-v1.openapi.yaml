@@ -4484,6 +4484,12 @@ paths:
         reads the whole directory and every unanswered invitation. A coach reads
         only the relationships they hold or stand in for, and only the
         invitations they themselves sent.
+
+
+        HU-STUDIO-087. `guest_quota` is how full the gym is, counted over the whole
+        organization whatever the caller may list: a coach is held to the same quota
+        as everyone else and has to be told how much of it is left. Allfit fixes the
+        number; Studio never changes it, and who set it is not part of the answer.
       security:
         - cookieAuth: []
       parameters:
@@ -4939,6 +4945,15 @@ paths:
 
         The initial-program proposal in criteria 2, 6 and 7 of the story is not
         implemented: an organization has no way to publish a program yet.
+
+
+        HU-STUDIO-087. A gym holds as many people as Allfit sold it. A new
+        invitation that would take a place the gym does not have is refused with
+        409 `guest-quota-full` before anything is written, for every role that may
+        invite. Reusing a pending invitation is not refused, because it already
+        holds its place, and neither is a retry of a command that went through. A
+        gym with no quota is not limited. The figure is read beforehand from the
+        client directory (`guest_quota`).
       security:
         - cookieAuth: []
       parameters:
@@ -4979,7 +4994,21 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: >-
+            The gym has no places left in its guest quota (`guest-quota-full`), or the
+            command conflicts with a concurrent one or reuses an idempotency identity.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://errors.allfit.invalid/guest-quota-full
+                title: The gym has no places left in its guest quota
+                status: 409
+                request_id: 01JEXAMPLE0000000000000000
         '422':
           $ref: '#/components/responses/ValidationFailed'
         '429':
@@ -17903,7 +17932,7 @@ components:
     ClientDirectoryPage:
       type: object
       additionalProperties: false
-      required: [data, page]
+      required: [data, page, guest_quota]
       properties:
         data:
           type: array
@@ -17912,6 +17941,38 @@ components:
             $ref: '#/components/schemas/ClientDirectoryItem'
         page:
           $ref: '#/components/schemas/Page'
+        guest_quota:
+          $ref: '#/components/schemas/StudioGuestQuota'
+    StudioGuestQuota:
+      type: object
+      additionalProperties: false
+      description: >-
+        How full the gym is against the quota Allfit sold it. It carries nothing about
+        who set that number or when.
+      required: [seats, occupied, places_left, over_quota]
+      properties:
+        seats:
+          type: [integer, 'null']
+          minimum: 1
+          description: Null is no limit, which is not the same as a limit of zero.
+        occupied:
+          type: integer
+          minimum: 0
+          description: >-
+            Live relationships plus client invitations still awaiting an answer. An
+            invitation that was rejected, revoked or has run out of time has freed its
+            place, and so has a terminated relationship.
+        places_left:
+          type: [integer, 'null']
+          minimum: 0
+          description: >-
+            Null when there is no limit. Zero when the quota is full or already
+            exceeded, because there is no such thing as a negative place.
+        over_quota:
+          type: boolean
+          description: >-
+            The gym has more taken than it was sold, because Allfit lowered the number.
+            Nobody is removed; only new invitations are refused.
     OrganizationCapability:
       type: object
       additionalProperties: false

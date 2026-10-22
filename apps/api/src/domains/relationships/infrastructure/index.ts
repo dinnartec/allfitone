@@ -43,6 +43,13 @@ type DirectoryRow = {
   sort_id: string
 }
 
+type GuestQuotaRow = {
+  seats: number | null
+  occupied: number
+  places_left: number | null
+  over_quota: boolean
+}
+
 export function createClientDirectoryDatabase(
   sql: postgres.Sql = database(),
 ): ClientDirectoryDatabase {
@@ -64,10 +71,21 @@ export function createClientDirectoryDatabase(
               ${query.cursorId ?? null}::uuid
             )
           `
+          // Same transaction, so the figure and the page describe one instant.
+          const [quota] = await transaction<GuestQuotaRow[]>`
+            select * from organizations.studio_guest_quota(${query.organizationId}::uuid)
+          `
+          if (!quota) throw new Error('studio_guest_quota returned no row')
           const hasMore = rows.length > query.limit
           return {
             hasMore,
             items: rows.slice(0, query.limit).map(toEntry),
+            guestQuota: {
+              seats: quota.seats,
+              occupied: quota.occupied,
+              placesLeft: quota.places_left,
+              overQuota: quota.over_quota,
+            },
           }
         }),
       )

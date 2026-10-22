@@ -138,6 +138,12 @@ export function studioRelationshipRoutes(injected: StudioRelationshipDependencie
               ? encodeClientCursor(last.sortGroup, last.sortName, last.sortId, status)
               : null,
         },
+        guest_quota: {
+          seats: page.guestQuota.seats,
+          occupied: page.guestQuota.occupied,
+          places_left: page.guestQuota.placesLeft,
+          over_quota: page.guestQuota.overQuota,
+        },
       })
     } catch (error) {
       return failure(c, error)

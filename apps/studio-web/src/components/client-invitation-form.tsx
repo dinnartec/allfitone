@@ -32,7 +32,7 @@ import {
   SetupPanelTitle,
 } from '@allfitone/react/components/setup-shell'
 import { Spinner } from '@allfitone/react/components/spinner'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
@@ -51,6 +51,7 @@ import {
 import {
   isStudioQuerySessionCancelled,
   offerableScopesQueryOptions,
+  organizationClientsQueryOptions,
   organizationRolesQueryOptions,
   studioQueryKeys,
 } from '@/lib/studio-query'
@@ -61,6 +62,13 @@ import {
   validateDraft,
   type InvitationDraftErrors,
 } from '@/lib/client-invitations'
+import {
+  QUOTA_FULL_MESSAGE,
+  QUOTA_RULE_NOTE,
+  guestQuotaOf,
+  invitationBlockedReason,
+  quotaSummary,
+} from '@/lib/guest-quota'
 
 export function ClientInvitationForm() {
   const router = useRouter()
@@ -68,6 +76,12 @@ export function ClientInvitationForm() {
   const { current } = useOrganizationContext()
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const scopesQuery = useQuery(offerableScopesQueryOptions())
+  // The same read as the directory, so the figure is the one the directory shows.
+  const quotaQuery = useInfiniteQuery(
+    organizationClientsQueryOptions(current.organization_id, 'all', 50),
+  )
+  const quota = guestQuotaOf(quotaQuery.data)
+  const blockedReason = invitationBlockedReason(quota)
   const allowed = canInviteClients(current.roles, rolesQuery.data?.items)
   const directoryPath = `/organizations/${current.organization_id}/clients`
 
@@ -87,7 +101,7 @@ export function ClientInvitationForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (submitting) return
+    if (submitting || blockedReason) return
     const draft = { contact, scopeCodes }
     const found = validateDraft(draft)
     setErrors(found)
@@ -109,6 +123,12 @@ export function ClientInvitationForm() {
         // is a new invitation rather than a replay of one that never landed.
         setCommand(newCommand())
         return
+      }
+      if (caught instanceof StudioApiError && caught.code === 'guest-quota-full') {
+        // The figure on screen was stale: read it again so the form explains itself.
+        await queryClient.invalidateQueries({
+          queryKey: studioQueryKeys.organizationClientsRoot(current.organization_id),
+        })
       }
       setFailure(caught instanceof StudioApiError ? invitationError(caught) : GENERIC_FAILURE)
     }
@@ -298,10 +318,27 @@ export function ClientInvitationForm() {
             {errors.scopes ? <FieldError>{errors.scopes}</FieldError> : null}
           </FieldSet>
 
+          {quota ? (
+            <FieldDescription data-guest-quota-summary>{quotaSummary(quota)}</FieldDescription>
+          ) : null}
+
+          {blockedReason ? (
+            <Alert variant="warning" data-guest-quota-blocked>
+              <AlertTitle>No puedes invitar a nadie nuevo ahora</AlertTitle>
+              <AlertDescription>
+                {blockedReason} {QUOTA_RULE_NOTE}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {failure ? <FieldError>{failure}</FieldError> : null}
 
           <SetupPanelActions>
-            <Button type="submit" size="lg" disabled={submitting || catalog.length === 0}>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={submitting || catalog.length === 0 || Boolean(blockedReason)}
+            >
               {submitting ? <Spinner label="Enviando la invitación" /> : null}
               {submitting ? 'Enviando…' : 'Enviar invitación'}
             </Button>
@@ -325,6 +362,7 @@ const GENERIC_FAILURE =
 
 function invitationError(error: StudioApiError): string {
   if (error.status === 403) return 'Tu rol ya no permite invitar clientes en esta organización.'
+  if (error.code === 'guest-quota-full') return QUOTA_FULL_MESSAGE
   if (error.status === 409) return 'Esa invitación ya se envió. Revisa el directorio.'
   if (error.status === 422) return 'Revisa el correo y los permisos marcados.'
   if (error.status === 429) {

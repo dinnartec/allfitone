@@ -15,5 +15,6 @@ export type {
   DirectoryPage,
   DirectoryQuery,
   DirectoryRelationshipEntry,
+  GuestQuota,
   RelationshipStatus,
 } from './domain/index.js'

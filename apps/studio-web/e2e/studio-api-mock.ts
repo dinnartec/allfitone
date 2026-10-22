@@ -18,11 +18,24 @@ export interface MockResponse {
   headers?: Record<string, string>
 }
 
+export interface StudioGuestQuotaBody {
+  seats: number | null
+  occupied: number
+  places_left: number | null
+  over_quota: boolean
+}
+
 export interface StudioApiFixture {
   session: unknown
   memberships: unknown[]
   organizationMemberships: unknown[]
   organizationClients: unknown[]
+  /**
+   * `null` derives it from the list, which is a gym nobody capped. Set it to
+   * hold the gym at its quota: the figure counts the whole gym, so it is not the
+   * length of what this caller may read.
+   */
+  guestQuota: StudioGuestQuotaBody | null
   relationshipState: unknown
   relationshipHistory: unknown[]
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
@@ -736,6 +749,7 @@ export function createStudioApiFixture(
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
     organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
+    guestQuota: null,
     relationshipState: structuredClone(relationshipState),
     relationshipHistory: structuredClone(relationshipHistory),
     assignmentOutcome: 'created',
@@ -928,7 +942,19 @@ function defaultResponse(
           )
         })
       : fixture.organizationClients
-    return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+    return {
+      status: 200,
+      body: {
+        data,
+        page: { has_more: false, next_cursor: null },
+        guest_quota: fixture.guestQuota ?? {
+          seats: null,
+          occupied: fixture.organizationClients.length,
+          places_left: null,
+          over_quota: false,
+        },
+      },
+    }
   }
   if (
     request.method === 'GET' &&

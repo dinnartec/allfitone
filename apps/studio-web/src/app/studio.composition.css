@@ -762,6 +762,7 @@
 
 [data-team-directory-note],
 [data-client-directory-note],
+[data-guest-quota-summary],
 [data-relationship-grant-note] {
   max-width: var(--studio-measure);
 }

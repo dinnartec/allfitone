@@ -51,9 +51,22 @@ export interface DirectoryInvitationEntry {
   readonly sortId: string
 }
 
+/**
+ * How full the gym is against the quota Allfit sold it. `null` seats is no
+ * limit, which is not zero, and `placesLeft` is `null` with it. Nothing here
+ * says who set the number.
+ */
+export interface GuestQuota {
+  readonly seats: number | null
+  readonly occupied: number
+  readonly placesLeft: number | null
+  readonly overQuota: boolean
+}
+
 export interface DirectoryPage {
   readonly items: readonly DirectoryEntry[]
   readonly hasMore: boolean
+  readonly guestQuota: GuestQuota
 }
 
 export interface DirectoryQuery {

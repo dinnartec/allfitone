@@ -2550,7 +2550,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   ClientDirectoryPage: {
     type: 'object',
     additionalProperties: false,
-    required: ['data', 'page'],
+    required: ['data', 'page', 'guest_quota'],
     properties: {
       data: {
         type: 'array',
@@ -2561,6 +2561,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       page: {
         $ref: '#/components/schemas/Page',
+      },
+      guest_quota: {
+        $ref: '#/components/schemas/StudioGuestQuota',
       },
     },
   },
@@ -13727,6 +13730,37 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       analytics: {
         $ref: '#/components/schemas/AnalyticsIdentity',
+      },
+    },
+  },
+  StudioGuestQuota: {
+    type: 'object',
+    additionalProperties: false,
+    description:
+      'How full the gym is against the quota Allfit sold it. It carries nothing about who set that number or when.',
+    required: ['seats', 'occupied', 'places_left', 'over_quota'],
+    properties: {
+      seats: {
+        type: ['integer', 'null'],
+        minimum: 1,
+        description: 'Null is no limit, which is not the same as a limit of zero.',
+      },
+      occupied: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'Live relationships plus client invitations still awaiting an answer. An invitation that was rejected, revoked or has run out of time has freed its place, and so has a terminated relationship.',
+      },
+      places_left: {
+        type: ['integer', 'null'],
+        minimum: 0,
+        description:
+          'Null when there is no limit. Zero when the quota is full or already exceeded, because there is no such thing as a negative place.',
+      },
+      over_quota: {
+        type: 'boolean',
+        description:
+          'The gym has more taken than it was sold, because Allfit lowered the number. Nobody is removed; only new invitations are refused.',
       },
     },
   },

@@ -910,6 +910,40 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar los clientes')).toBeVisible()
     },
   },
+  // --- the guest quota on the two screens that say it · HU-087 ---
+  {
+    // The gym is full. The figure is counted over the whole gym, so it is set
+    // here rather than derived from the three entries the list shows.
+    stories: 'HU-087 · a directory whose gym has no places left',
+    path: `${workspace}/clients`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        guestQuota: { seats: 3, occupied: 3, places_left: 0, over_quota: false },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText(/No queda ningún lugar/)).toBeVisible()
+    },
+  },
+  {
+    // Criterion 4 on the screen: the refusal is said before anything is typed,
+    // and the button cannot be pressed to find it out. Over quota, not merely
+    // full, because that is the state Allfit can create by lowering the number,
+    // and it must not read as somebody having been removed.
+    stories: 'HU-087 · the invitation form of a gym that is over its quota',
+    path: `${workspace}/clients/invitations/new`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        guestQuota: { seats: 3, occupied: 4, places_left: 0, over_quota: true },
+      }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('No puedes invitar a nadie nuevo ahora')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Enviar invitación' })).toBeDisabled()
+    },
+  },
   // --- `/organizations/[id]/clients/[relationshipId]` · HU-025 ---
   {
     // The fullest the screen gets: a holder, a substitution nobody has answered

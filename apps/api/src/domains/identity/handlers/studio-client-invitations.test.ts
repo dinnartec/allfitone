@@ -245,6 +245,24 @@ describe('what it refuses', () => {
     expect(response.status).toBe(403)
   })
 
+  test('a gym with no places left is refused with the reason, not as an outage', async () => {
+    const service = invitations({
+      issue: async () => {
+        throw Object.assign(new Error('the gym has no places left in its guest quota'), {
+          code: '55000',
+        })
+      },
+    })
+    const response = await app(service).fetch(post(BODY))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'guest-quota-full',
+        detail: 'the gym has no places left in its guest quota',
+      },
+    })
+  })
+
   test('issuance while the feature is switched off', async () => {
     const service = invitations({
       issue: async () => {

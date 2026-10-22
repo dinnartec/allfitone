@@ -78,11 +78,13 @@ function invited(overrides: Record<string, unknown> = {}): DirectoryEntry {
   } as DirectoryEntry
 }
 
+const QUOTA = { seats: 5, occupied: 3, placesLeft: 2, overQuota: false } as const
+
 function directory(page: Partial<DirectoryPage> = {}, capture?: (query: DirectoryQuery) => void) {
   const service: ClientDirectoryService = {
     listClients: async (_actor, query) => {
       capture?.(query)
-      return { items: [client()], hasMore: false, ...page }
+      return { items: [client()], hasMore: false, guestQuota: QUOTA, ...page }
     },
   }
   return service
@@ -121,6 +123,41 @@ describe('the client directory endpoint', () => {
       },
     ])
     expect(body.page).toEqual({ has_more: false, next_cursor: null })
+  })
+
+  test('says how many places are taken and how many are left', async () => {
+    const response = await app(directory()).request(
+      `/studio/v1/organizations/${ORGANIZATION}/clients`,
+      { headers: HEADERS },
+    )
+    const body = (await response.json()) as { guest_quota: Record<string, unknown> }
+    // Exactly four figures: who set the number is never part of the answer.
+    expect(body.guest_quota).toEqual({ seats: 5, occupied: 3, places_left: 2, over_quota: false })
+  })
+
+  test('a gym with no quota has absent figures, never zero', async () => {
+    const unlimited = { seats: null, occupied: 12, placesLeft: null, overQuota: false }
+    const response = await app(directory({ guestQuota: unlimited })).request(
+      `/studio/v1/organizations/${ORGANIZATION}/clients`,
+      { headers: HEADERS },
+    )
+    const body = (await response.json()) as { guest_quota: Record<string, unknown> }
+    expect(body.guest_quota).toEqual({
+      seats: null,
+      occupied: 12,
+      places_left: null,
+      over_quota: false,
+    })
+  })
+
+  test('a gym over its quota says so with nothing left', async () => {
+    const over = { seats: 2, occupied: 4, placesLeft: 0, overQuota: true }
+    const response = await app(directory({ guestQuota: over })).request(
+      `/studio/v1/organizations/${ORGANIZATION}/clients`,
+      { headers: HEADERS },
+    )
+    const body = (await response.json()) as { guest_quota: Record<string, unknown> }
+    expect(body.guest_quota).toEqual({ seats: 2, occupied: 4, places_left: 0, over_quota: true })
   })
 
   test('presents somebody invited with no person and no name', async () => {
@@ -249,7 +286,7 @@ describe('the client directory endpoint', () => {
     const service: ClientDirectoryService = {
       listClients: async () => {
         called = true
-        return { items: [], hasMore: false }
+        return { items: [], hasMore: false, guestQuota: QUOTA }
       },
     }
     const response = await app(service).request('/studio/v1/organizations/not-a-uuid/clients', {

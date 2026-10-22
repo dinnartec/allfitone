@@ -22,6 +22,10 @@ export type Database = {
         Args: { p_membership_id: string }
         Returns: boolean
       }
+      counting_guest_quota: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       counts_platform_metrics: { Args: never; Returns: boolean }
       has_active_relationship: {
         Args: { p_organization_id: string }
@@ -4068,6 +4072,10 @@ export type Database = {
         }
         Returns: Json
       }
+      require_guest_quota_place: {
+        Args: { p_organization_id: string }
+        Returns: undefined
+      }
       require_organization_directory_reader: {
         Args: { p_actor_person_id: string; p_actor_session_id: string }
         Returns: undefined
@@ -4112,6 +4120,15 @@ export type Database = {
         }[]
       }
       site_projection: { Args: { p_site_id: string }; Returns: Json }
+      studio_guest_quota: {
+        Args: { p_organization_id: string }
+        Returns: {
+          occupied: number
+          over_quota: boolean
+          places_left: number
+          seats: number
+        }[]
+      }
       suspend_organization: {
         Args: {
           p_actor_person_id: string
