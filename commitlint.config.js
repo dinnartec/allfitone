@@ -16,6 +16,7 @@ export default {
         'studio-web',
         'backoffice-web',
         'space',
+        'space-web',
         // packages
         'auth-provider',
         'queue',
