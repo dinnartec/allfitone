@@ -33,7 +33,7 @@ import { WorkspacePageHeader } from './workspace-page-header'
 import { canViewTeamDirectory, memberInitials, organizationRoleLabel } from '@/lib/team-directory'
 import { canInviteTeam } from '@/lib/team-invitations'
 import { canManageRoles, canReceiveARole } from '@/lib/team-roles'
-import { useCompactViewport } from '@/lib/use-compact-viewport'
+import { useCompactTable } from '@/lib/use-compact-table'
 import {
   StudioApiError,
   type OrganizationMembership,
@@ -61,7 +61,7 @@ const FILTERS: ReadonlyArray<{ value: MembershipFilter; label: string }> = [
 
 export function TeamMembershipList() {
   const { current } = useOrganizationContext()
-  const compact = useCompactViewport()
+  const { compact, measuredRef } = useCompactTable<HTMLElement>()
   const queryClient = useQueryClient()
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const canViewDirectory = canViewTeamDirectory(current.roles)
@@ -163,7 +163,7 @@ export function TeamMembershipList() {
             }
           : undefined
   return (
-    <section data-team-page aria-label="Directorio de integrantes">
+    <section ref={measuredRef} data-team-page aria-label="Directorio de integrantes">
       <WorkspacePageHeader
         description={`Consulta las membresías activas y finalizadas de ${current.display_name}.`}
         actions={
@@ -198,8 +198,9 @@ export function TeamMembershipList() {
         </p>
       ) : null}
 
-      {/* Five columns do not fit a phone, so narrow viewports get the same data
-          as cards. Only one presentation is rendered — see useCompactViewport. */}
+      {/* Five columns do not fit the space a narrow register has, so it gets the
+          same data as cards. Only one presentation is rendered — see
+          useCompactTable. */}
       {compact ? (
         <div data-team-directory-cards aria-label="Integrantes" aria-busy={loading || undefined}>
           {tableState ? (

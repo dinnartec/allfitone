@@ -1764,8 +1764,9 @@ export const SCREENS: Screen[] = [
     },
   },
   {
-    // Below 720px the directory renders a card list instead of the table, and
-    // the two are separate markup rather than one behind a CSS toggle.
+    // A register renders a card list instead of its table when its own
+    // container has no room for one, which a phone never does. The two are
+    // separate markup rather than one behind a CSS toggle.
     stories: 'HU-017 · team directory as cards',
     path: `${workspace}/team`,
     fixture: memberOfTwo,
@@ -1868,8 +1869,8 @@ export const SCREENS: Screen[] = [
     fixture: withIssuedInvitations,
   },
   {
-    // Six columns do not fit a phone, so the register renders as cards below
-    // 720px — separate markup, like the directory's, not one behind a toggle.
+    // Six columns never fit a phone, so the register renders as cards —
+    // separate markup, like the directory's, not one behind a toggle.
     stories: 'HU-015 / HU-016 · issued invitations as cards',
     path: `${workspace}/team/invitations`,
     fixture: withIssuedInvitations,

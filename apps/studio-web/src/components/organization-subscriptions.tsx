@@ -76,7 +76,7 @@ import {
 } from '@/lib/organization-billing'
 import { StudioApiError, newCommand, studioApi } from '@/lib/studio-api'
 import type { OrganizationSubscription } from '@/lib/studio-api'
-import { useCompactViewport } from '@/lib/use-compact-viewport'
+import { useCompactTable } from '@/lib/use-compact-table'
 import {
   flattenSubscriptionPages,
   isStudioForbidden,
@@ -106,7 +106,7 @@ interface PendingAction {
 
 export function OrganizationSubscriptions() {
   const { current } = useOrganizationContext()
-  const compact = useCompactViewport()
+  const { compact, measuredRef } = useCompactTable<HTMLElement>()
   const queryClient = useQueryClient()
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const canManage = canManageBilling(current.roles, rolesQuery.data?.items)
@@ -225,7 +225,7 @@ export function OrganizationSubscriptions() {
           : undefined
 
   return (
-    <section data-billing-page aria-label="Cobros de la organización">
+    <section ref={measuredRef} data-billing-page aria-label="Cobros de la organización">
       <WorkspacePageHeader
         description={`Consulta quién paga ${current.display_name} y en qué plan está cada persona.`}
       />
@@ -248,8 +248,9 @@ export function OrganizationSubscriptions() {
         </p>
       ) : null}
 
-      {/* Five columns do not fit a phone, so narrow viewports get the same data as
-          cards. Only one presentation is rendered — see useCompactViewport. */}
+      {/* Five columns do not fit the space a narrow register has, so it gets the
+          same data as cards. Only one presentation is rendered — see
+          useCompactTable. */}
       {compact ? (
         <div data-billing-cards aria-label="Suscripciones" aria-busy={loading || undefined}>
           {tableState ? (
@@ -454,25 +455,41 @@ function SubscriptionCard({
   return (
     <Card data-billing-card>
       <CardHeader>
-        <span data-billing-person>
+        {/* The same `strong` the table row uses, carrying the heading role so a
+            list of cards can be navigated by name. */}
+        <div data-billing-person>
           <Avatar decorative>
             <AvatarFallback>{personInitials(subscription.person_name)}</AvatarFallback>
           </Avatar>
-          {subscription.person_name}
-        </span>
-        <Badge variant={badgeVariant(subscription.status)}>
-          {statusLabel(subscription.status)}
-        </Badge>
+          <strong role="heading" aria-level={3}>
+            {subscription.person_name}
+          </strong>
+        </div>
       </CardHeader>
       <CardContent>
-        <p data-billing-card-plan>
-          {subscription.plan_name} ·{' '}
-          {formatAmount(subscription.amount_minor, subscription.currency_code)}{' '}
-          {formatPeriod(subscription.billing_period)}
-        </p>
-        <p data-billing-card-period>
-          Próximo cobro: {formatPeriodEnd(subscription.current_period_end)}
-        </p>
+        {/* Same facts as the row, in the same order, each one named — as the
+            team directory's cards do. Three loose paragraphs sat here before,
+            and CardContent spaces nothing, so the plan and the next charge were
+            flush against each other and the state was a badge under the name
+            with nothing saying it was a state. */}
+        <dl data-billing-facts>
+          <dt>Plan</dt>
+          <dd>
+            {subscription.plan_name} ·{' '}
+            {formatAmount(subscription.amount_minor, subscription.currency_code)}{' '}
+            {formatPeriod(subscription.billing_period)}
+          </dd>
+
+          <dt>Estado</dt>
+          <dd>
+            <Badge variant={badgeVariant(subscription.status)}>
+              {statusLabel(subscription.status)}
+            </Badge>
+          </dd>
+
+          <dt>Próximo cobro</dt>
+          <dd>{formatPeriodEnd(subscription.current_period_end)}</dd>
+        </dl>
         <SubscriptionActions subscription={subscription} onAct={onAct} />
       </CardContent>
     </Card>

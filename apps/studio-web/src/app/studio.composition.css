@@ -133,6 +133,7 @@
 [data-client-invitation-actions],
 [data-credential-actions],
 [data-card-footer-actions],
+[data-billing-actions],
 [data-profile-form-actions] {
   display: flex;
   flex-wrap: wrap;
@@ -213,6 +214,7 @@
 [data-invitation-waiting],
 [data-team-page],
 [data-client-page],
+[data-billing-page],
 [data-client-invite-page],
 [data-team-section],
 [data-profile-section],
@@ -485,6 +487,7 @@
 [data-ready-later-item],
 [data-team-member-identity],
 [data-client-identity],
+[data-billing-person],
 [data-overview-team-identity] {
   display: flex;
   min-width: 0;
@@ -540,6 +543,7 @@
 [data-ownership-invitation-summary] dt,
 [data-team-member-facts] dt,
 [data-client-facts] dt,
+[data-billing-facts] dt,
 [data-relationship-facts] dt,
 [data-credential-details] dt {
   font-family: var(--afo-typography-label-font-family);
@@ -556,12 +560,14 @@
    down the card instead of leaving each one to start wherever its label ends. */
 /* CardContent pads sideways and nothing else, so the action sat against the
    last fact. The gap belongs to Studio's own element, not to the component. */
-[data-team-member-card] [data-team-invitation-actions] {
+[data-team-member-card] [data-team-invitation-actions],
+[data-billing-card] [data-billing-actions] {
   margin-block-start: var(--afo-space-4);
 }
 
 [data-team-member-facts],
 [data-client-facts],
+[data-billing-facts],
 [data-relationship-facts] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -613,6 +619,7 @@
 [data-organization-site-list],
 [data-team-directory-card-list],
 [data-client-directory-card-list],
+[data-billing-card-list],
 [data-relationship-substitution-list],
 [data-relationship-grant-cards],
 [data-relationship-history-list],
@@ -729,8 +736,13 @@
 
 /* -------------------------------------------------------------------- team */
 
+/* Every register that answers with cards when its table does not fit, so the
+   list, its pagination and its note keep one rhythm. Billing was left out of
+   all three of these rules and had no spacing at all on a phone: the cards sat
+   flush against each other and against the note below them. */
 [data-team-directory-cards],
-[data-client-directory-cards] {
+[data-client-directory-cards],
+[data-billing-cards] {
   display: grid;
   gap: var(--afo-space-4);
 }
@@ -745,7 +757,8 @@
    keeps the track at its full width and paints straight over the badge in the
    next column, which is what happened here. */
 [data-team-member-identity],
-[data-client-identity] {
+[data-client-identity],
+[data-billing-person] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
 }
@@ -762,6 +775,7 @@
 
 [data-team-directory-note],
 [data-client-directory-note],
+[data-billing-note],
 [data-relationship-grant-note] {
   max-width: var(--studio-measure);
 }
@@ -1026,6 +1040,7 @@
   [data-profile-setup-actions],
   [data-profile-form-actions],
   [data-card-footer-actions],
+  [data-billing-actions],
   [data-team-invitation-actions] {
     width: 100%;
   }
@@ -1039,6 +1054,7 @@
   [data-credential-actions] > *,
   [data-profile-setup-actions] > *,
   [data-card-footer-actions] > *,
+  [data-billing-actions] > *,
   [data-profile-form-actions] > * {
     flex: 1;
   }

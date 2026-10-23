@@ -36,7 +36,7 @@ import {
   directoryEntryId,
   seesEveryClient,
 } from '@/lib/client-directory'
-import { useCompactViewport } from '@/lib/use-compact-viewport'
+import { useCompactTable } from '@/lib/use-compact-table'
 import { StudioApiError, type ClientDirectoryItem } from '@/lib/studio-api'
 import {
   flattenClientPages,
@@ -60,7 +60,7 @@ const FILTERS: ReadonlyArray<{ value: ClientFilter; label: string }> = [
 
 export function ClientDirectoryList() {
   const { current } = useOrganizationContext()
-  const compact = useCompactViewport()
+  const { compact, measuredRef } = useCompactTable<HTMLElement>()
   const queryClient = useQueryClient()
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const canView = canViewClientDirectory(current.roles, rolesQuery.data?.items)
@@ -148,7 +148,7 @@ export function ClientDirectoryList() {
           : undefined
 
   return (
-    <section data-client-page aria-label="Directorio de clientes">
+    <section ref={measuredRef} data-client-page aria-label="Directorio de clientes">
       <WorkspacePageHeader
         description={
           everyClient
@@ -200,8 +200,9 @@ export function ClientDirectoryList() {
         </p>
       ) : null}
 
-      {/* Four columns do not fit a phone, so narrow viewports get the same data
-          as cards. Only one presentation is rendered — see useCompactViewport. */}
+      {/* Four columns do not fit the space a narrow register has, so it gets the
+          same data as cards. Only one presentation is rendered — see
+          useCompactTable. */}
       {compact ? (
         <div data-client-directory-cards aria-label="Clientes" aria-busy={loading || undefined}>
           {tableState ? (

@@ -1,12 +1,16 @@
 'use client'
 
 /**
- * Viewports too narrow for a five-column directory.
+ * Viewports narrow enough that the brand shows its compact mark.
  *
- * The table and the card list render one at a time rather than both behind a
- * CSS toggle: duplicating the rows would double the DOM, put every member's
- * name in the document twice for find-in-page, and leave the hidden copy to be
- * matched by anything querying the document rather than the accessibility tree.
+ * This answers a question about the screen, which is why it may ask the screen:
+ * which wordmark fits beside the profile's labelled controls is settled by the
+ * phone it is held in, not by a container.
+ *
+ * The registers used to share it and no longer do. What a table needs is not a
+ * viewport question — the sidebar takes between 0 and 272px of the width before
+ * a register sees any of it, so the same viewport leaves wildly different room
+ * — and they ask their own container instead. See `useCompactTable`.
  */
 import { useEffect, useState } from 'react'
 

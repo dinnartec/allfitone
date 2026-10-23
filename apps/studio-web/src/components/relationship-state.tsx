@@ -80,7 +80,7 @@ import {
   seesEverySubstitution,
 } from '@/lib/relationship-substitution'
 import { canTerminateRelationship } from '@/lib/relationship-termination'
-import { useCompactViewport } from '@/lib/use-compact-viewport'
+import { useCompactTable } from '@/lib/use-compact-table'
 import type {
   OrganizationMembership,
   RelationshipGrant,
@@ -104,7 +104,7 @@ const COACH_PAGE_SIZE = 50
 export function RelationshipStateScreen() {
   const { current } = useOrganizationContext()
   const params = useParams<{ relationshipId: string }>()
-  const compact = useCompactViewport()
+  const { compact, measuredRef } = useCompactTable<HTMLDivElement>()
   const rolesQuery = useQuery(organizationRolesQueryOptions(current.organization_id))
   const query = useQuery(relationshipQueryOptions(current.organization_id, params.relationshipId))
   const everyClient = seesEveryClient(current.roles, rolesQuery.data?.items)
@@ -136,7 +136,7 @@ export function RelationshipStateScreen() {
   const relationship = query.data
 
   return (
-    <div data-relationship-state>
+    <div ref={measuredRef} data-relationship-state>
       <WorkspacePageHeader
         description={
           relationship.status === 'active'
