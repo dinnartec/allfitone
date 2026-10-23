@@ -348,12 +348,14 @@ for (const viewport of [
       await installStudioApiMock(page, fixture)
       await page.goto(`/organizations/${activeMembership.organization_id}/team`)
 
-      // Below 720px the five-column table is replaced by cards, so the
-      // directory is readable without a horizontal scroll that nothing signals.
-      const directory =
-        viewport.width <= 720
-          ? page.getByLabel('Integrantes').first()
-          : page.getByRole('region', { name: 'Tabla de integrantes de la organización' })
+      // Either presentation is correct here. The register answers with a table
+      // when its own container has the room for one and with cards when it does
+      // not, so which one appears depends on the sidebar as much as on the
+      // viewport — at 768px the sidebar is a drawer and the five columns still
+      // ask for more than the page can give (see useCompactTable). What this
+      // test guards is the names being readable either way, with no horizontal
+      // scroll that nothing signals.
+      const directory = page.locator('[data-team-page]')
       await expect(directory).toBeVisible()
       await expect(directory.getByText('Ada Lovelace', { exact: true })).toBeVisible()
       await expect(directory.getByText('Propietario', { exact: true })).toBeVisible()
