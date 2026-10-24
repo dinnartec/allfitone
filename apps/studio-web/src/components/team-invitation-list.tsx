@@ -14,7 +14,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from '@allfitone/rea
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
-import { Empty, EmptyDescription, EmptyTitle } from '@allfitone/react/components/empty'
+import { RegisterCardState } from '@/components/register-card-state'
 import { Spinner } from '@allfitone/react/components/spinner'
 import {
   Table,
@@ -258,10 +258,7 @@ export function TeamInvitationList() {
       {compact ? (
         <div data-team-directory-cards aria-label="Invitaciones" aria-busy={loading || undefined}>
           {listState ? (
-            <Empty>
-              <EmptyTitle>{listState.title}</EmptyTitle>
-              <EmptyDescription>{listState.description}</EmptyDescription>
-            </Empty>
+            <RegisterCardState {...listState} />
           ) : (
             <ul data-team-directory-card-list>
               {items.map((item) => (

@@ -5,13 +5,8 @@ import { Avatar, AvatarFallback } from '@allfitone/react/components/avatar'
 import { Badge } from '@allfitone/react/components/badge'
 import { Button, buttonVariants } from '@allfitone/react/components/button'
 import { Card, CardContent, CardHeader } from '@allfitone/react/components/card'
-import {
-  Empty,
-  EmptyDescription,
-  EmptyTitle,
-  EmptyContent,
-} from '@allfitone/react/components/empty'
 import { Spinner } from '@allfitone/react/components/spinner'
+import { RegisterCardState } from '@/components/register-card-state'
 import {
   Table,
   TableBody,
@@ -206,13 +201,10 @@ export function ClientDirectoryList() {
       {compact ? (
         <div data-client-directory-cards aria-label="Clientes" aria-busy={loading || undefined}>
           {tableState ? (
-            <Empty>
-              <EmptyTitle>{tableState.title}</EmptyTitle>
-              <EmptyDescription>{tableState.description}</EmptyDescription>
-              {'action' in tableState && tableState.action ? (
-                <EmptyContent>{tableState.action}</EmptyContent>
-              ) : null}
-            </Empty>
+            <RegisterCardState
+              {...tableState}
+              action={'action' in tableState ? tableState.action : undefined}
+            />
           ) : (
             <ul data-client-directory-card-list>
               {items.map((entry) => (
