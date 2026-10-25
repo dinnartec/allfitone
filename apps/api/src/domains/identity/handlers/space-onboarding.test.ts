@@ -955,6 +955,39 @@ describe('POST /space/v1/body-progress', () => {
     }
   })
 
+  test('takes the measurements Pro opens, each in the units of its dimension', async () => {
+    const app = appWith()
+    const bodies = [
+      { metric_code: 'waist', value: 82, unit: 'cm', measured_on: measured },
+      { metric_code: 'hip', value: 38, unit: 'in', measured_on: measured },
+      { metric_code: 'chest', value: 98, unit: 'cm', measured_on: measured },
+      { metric_code: 'arm', value: 34.5, unit: 'cm', measured_on: measured },
+      { metric_code: 'thigh', value: 56, unit: 'cm', measured_on: measured },
+      { metric_code: 'body_fat', value: 18, unit: 'percent', measured_on: measured },
+      { metric_code: 'muscle_mass', value: 32, unit: 'kg', measured_on: measured },
+      { metric_code: 'muscle_mass', value: 70, unit: 'lb', measured_on: measured },
+    ]
+
+    for (const body of bodies) {
+      expect((await post(app, route(), { body })).status).toBe(200)
+    }
+  })
+
+  test('says which function a measurement needs when the plan does not open it', async () => {
+    const app = appWith({
+      recordBodyProgress: async () => {
+        throw { code: 'AF402', detail: 'body_measurements' }
+      },
+    })
+
+    const response = await post(app, route(), {
+      body: { metric_code: 'waist', value: 82, unit: 'cm', measured_on: measured },
+    })
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ feature: 'body_measurements' })
+  })
+
   test('refuses a unit from the other dimension, without reaching the service', async () => {
     let called = false
     const app = appWith({
@@ -976,6 +1009,10 @@ describe('POST /space/v1/body-progress', () => {
       { metric_code: 'body_weight', value: 170, unit: 'cm', measured_on: measured },
       { metric_code: 'body_height', value: 74, unit: 'kg', measured_on: measured },
       { metric_code: 'body_fat', value: 18, unit: 'kg', measured_on: measured },
+      { metric_code: 'waist', value: 82, unit: 'kg', measured_on: measured },
+      { metric_code: 'muscle_mass', value: 32, unit: 'cm', measured_on: measured },
+      { metric_code: 'body_fat', value: 18, unit: 'cm', measured_on: measured },
+      { metric_code: 'shoulders', value: 118, unit: 'cm', measured_on: measured },
       { metric_code: 'body_weight', value: 0, unit: 'kg', measured_on: measured },
       { metric_code: 'body_weight', value: -74, unit: 'kg', measured_on: measured },
       { metric_code: 'body_weight', value: '74', unit: 'kg', measured_on: measured },

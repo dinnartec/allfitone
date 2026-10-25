@@ -42,7 +42,7 @@ function harness(overrides: Partial<SpaceNutritionService> = {}, actorFails = fa
     listMeals: async () => ({ data: [meal], page: { next_cursor: null, has_more: false } }),
     reviseMeal: async () => ({ ...meal, revision_number: 3 }),
     deleteMeal: async () => undefined,
-    readDailySummaries: async () => ({ data: [], streak_days: 4 }),
+    readDailySummaries: async () => ({ data: [], streak_days: 4, visible_from: null }),
     readGoals: async () => ({ active: null, proposals: [] }),
     publishGoal: async () => {
       throw new Error('not used')

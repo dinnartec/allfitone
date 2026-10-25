@@ -116,10 +116,13 @@ export type TrainingExperience = 'starting' | 'some_practice' | 'experienced'
 export type TrainingDiscipline = 'strength'
 
 /**
- * The two body metrics V1 records. The `body_` prefix is not decoration: `metric_code`
- * also names execution results, where `weight` is the load on the bar.
+ * The body metrics a person records. The `body_` prefix is not decoration: `metric_code`
+ * also names execution results, where `weight` is the load on the bar. Weight and
+ * height are free; the rest need `body_measurements`, which the database enforces.
  */
-export type BodyMetric = 'body_weight' | 'body_height'
+export type MassMetric = 'body_weight' | 'muscle_mass'
+export type LengthMetric = 'body_height' | 'waist' | 'hip' | 'chest' | 'arm' | 'thigh'
+export type BodyMetric = MassMetric | LengthMetric | 'body_fat'
 export type MassUnit = 'kg' | 'lb'
 export type LengthUnit = 'cm' | 'in'
 
@@ -129,8 +132,9 @@ export type LengthUnit = 'cm' | 'in'
  * conversion happens in the database, where the factor lives.
  */
 export type BodyProgressDeclaration =
-  | { metricCode: 'body_weight'; value: number; unit: MassUnit; measuredOn: string }
-  | { metricCode: 'body_height'; value: number; unit: LengthUnit; measuredOn: string }
+  | { metricCode: MassMetric; value: number; unit: MassUnit; measuredOn: string }
+  | { metricCode: LengthMetric; value: number; unit: LengthUnit; measuredOn: string }
+  | { metricCode: 'body_fat'; value: number; unit: 'percent'; measuredOn: string }
 
 /** What the database recorded, in canonical units, plus what she actually read. */
 export interface BodyProgressRecord {

@@ -91,6 +91,7 @@ describe('the history as Space sees it', () => {
         thumbnail_object_key: null,
       },
     ],
+    window: { visible_from: null, has_hidden: false },
     page: { next_cursor: null, has_more: false },
   }
 

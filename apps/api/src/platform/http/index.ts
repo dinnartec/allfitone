@@ -50,6 +50,8 @@ export type ApiErrorCode =
   /** The command already ran, and what it created has been deleted since. */
   | 'command-effect-disposed'
   | 'separation-of-duties'
+  /** The person's plan does not open this function, or its limit was reached (DT-018). */
+  | 'plan-limit-reached'
 
 const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   unauthenticated: 401,
@@ -72,6 +74,7 @@ const STATUS: Record<ApiErrorCode, ContentfulStatusCode> = {
   'rate-limited': 429,
   'command-effect-disposed': 410,
   'separation-of-duties': 403,
+  'plan-limit-reached': 403,
 }
 
 const TITLE: Record<ApiErrorCode, string> = {
@@ -95,6 +98,7 @@ const TITLE: Record<ApiErrorCode, string> = {
   'rate-limited': 'Too many requests',
   'command-effect-disposed': 'The command effect was disposed',
   'separation-of-duties': 'This actor already asked to read this person',
+  'plan-limit-reached': 'The plan does not include this function',
 }
 
 /**
@@ -106,16 +110,40 @@ export function fail(c: Context, code: ApiErrorCode, detail?: string) {
 }
 
 /** RFC 9457 response for contract-first endpoints migrating off the legacy envelope. */
-export function problem(c: Context, code: ApiErrorCode, detail?: string) {
+export function problem(
+  c: Context,
+  code: ApiErrorCode,
+  detail?: string,
+  extensions: Readonly<Record<string, string>> = {},
+) {
   return c.json(
     {
       type: `https://errors.allfit.invalid/${code}`,
       title: TITLE[code],
       status: STATUS[code],
       ...(detail ? { detail } : {}),
+      ...extensions,
       request_id: randomUUID(),
     },
     STATUS[code],
     { 'Content-Type': 'application/problem+json' },
   )
+}
+
+const FEATURE_CODE = /^[a-z][a-z0-9_]{1,63}$/
+
+/**
+ * The function a plan refused, when the database raised AF402. The function's code
+ * travels in the error's detail, and only a code of the catalogue's shape is believed.
+ */
+export function planLimitFeature(cause: unknown): string | undefined {
+  if (typeof cause !== 'object' || cause === null) return undefined
+  if (!('code' in cause) || cause.code !== 'AF402') return undefined
+  const detail = 'detail' in cause ? cause.detail : undefined
+  return typeof detail === 'string' && FEATURE_CODE.test(detail) ? detail : undefined
+}
+
+/** A plan limit is always a problem naming the function, whatever envelope the domain uses. */
+export function failPlanLimit(c: Context, feature: string) {
+  return problem(c, 'plan-limit-reached', undefined, { feature })
 }

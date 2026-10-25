@@ -30,6 +30,7 @@ export interface SpaceExecutionService {
   ): Promise<ExecutionSummary | null>
   listHistory(input: HistoryQuery): Promise<HistoryPage>
   readHistoryMonth: ExecutionDatabase['readHistoryMonth']
+  comparePeriods: ExecutionDatabase['comparePeriods']
   readFinished: ExecutionDatabase['readFinished']
   revise: ExecutionDatabase['revise']
   annul: ExecutionDatabase['annul']
@@ -65,16 +66,18 @@ export function createSpaceExecutionService(
       }
     },
     async listHistory(input) {
-      const { data, page } = await database.listHistory(input)
+      const { data, window, page } = await database.listHistory(input)
       return {
         data: data.map(({ thumbnail_object_key, ...item }) => ({
           ...item,
           thumbnail_url: address(thumbnail_object_key),
         })),
+        window,
         page,
       }
     },
     readHistoryMonth: (input) => database.readHistoryMonth(input),
+    comparePeriods: (input) => database.comparePeriods(input),
     readFinished: (input) => database.readFinished(input),
     revise: (input) => database.revise(input),
     annul: (input) => database.annul(input),

@@ -41,6 +41,7 @@ export interface SpacePlanningService {
   publishMySessionTemplate: SpacePlanningDatabase['publishMySessionTemplate']
   readMySessionTemplateDraft: SpacePlanningDatabase['readMySessionTemplateDraft']
   discardMySessionTemplate: SpacePlanningDatabase['discardMySessionTemplate']
+  duplicateMySessionTemplate: SpacePlanningDatabase['duplicateMySessionTemplate']
   discardMyProgram: SpacePlanningDatabase['discardMyProgram']
   removeMyProgram: SpacePlanningDatabase['removeMyProgram']
   duplicateMyProgram: SpacePlanningDatabase['duplicateMyProgram']
@@ -156,6 +157,7 @@ export function createSpacePlanningService(
     },
     readMySessionTemplateDraft: (input) => database.readMySessionTemplateDraft(input),
     discardMySessionTemplate: (input) => database.discardMySessionTemplate(input),
+    duplicateMySessionTemplate: (input) => database.duplicateMySessionTemplate(input),
     discardMyProgram: (input) => database.discardMyProgram(input),
     removeMyProgram: (input) => database.removeMyProgram(input),
     duplicateMyProgram: (input) => database.duplicateMyProgram(input),

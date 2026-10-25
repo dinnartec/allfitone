@@ -25,7 +25,7 @@ import { ObjectStoreError } from '@allfitone/object-store'
 import { Hono, type Context } from 'hono'
 
 import { authProvider } from '../../../platform/auth/index.js'
-import { fail } from '../../../platform/http/index.js'
+import { fail, failPlanLimit, planLimitFeature } from '../../../platform/http/index.js'
 import {
   SpaceActorError,
   spaceActorResolver,
@@ -372,6 +372,9 @@ export function spaceNutritionRoutes(
 
 function failure(c: Context, cause: unknown): Response {
   if (cause instanceof SpaceActorError) return fail(c, 'forbidden')
+  // The plan does not open this: the app offers Pro for exactly the function named.
+  const feature = planLimitFeature(cause)
+  if (feature) return failPlanLimit(c, feature)
   if (cause instanceof ConsentRequired) return fail(c, 'consent-required')
   if (cause instanceof RecognitionError) {
     console.warn('[nutrition] recognition failed', { failure: cause.failure })

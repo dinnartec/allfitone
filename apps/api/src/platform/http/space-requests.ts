@@ -13,7 +13,7 @@ import type { VerifiedToken } from '@allfitone/auth-provider'
 import type { Context } from 'hono'
 
 import { authProvider } from '../auth/index.js'
-import { problem, type ApiErrorCode } from './index.js'
+import { planLimitFeature, problem, type ApiErrorCode } from './index.js'
 
 export const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -126,6 +126,8 @@ function canonicalJson(value: unknown): unknown {
 }
 
 export function spaceFailure(c: Context, error: unknown, operation: string) {
+  const feature = planLimitFeature(error)
+  if (feature) return problem(c, 'plan-limit-reached', undefined, { feature })
   const code = databaseErrorCode(error)
   if (code === 'idempotency-in-progress') c.header('Retry-After', '1')
   if (code) return problem(c, code)

@@ -45,6 +45,8 @@ interface CatalogueRow {
   emphases: string[]
   // La clave y no la dirección: componerla es trabajo de la superficie.
   cover_object_key: string | null
+  locked: boolean
+  unlock_feature: string | null
 }
 
 interface AssignmentRow {
@@ -237,6 +239,17 @@ export function createSpacePlanningDatabase(): SpacePlanningDatabase {
         return answered(row?.template, 'discard the session template')
       }),
 
+    duplicateMySessionTemplate: (input) =>
+      command(sql, input.personId, async (transaction) => {
+        const [row] = await transaction<{ template: SessionTemplate }[]>`
+          select template from planning.duplicate_my_session_template(
+            ${input.personId}::uuid, ${input.templateId}::uuid,
+            ${input.idempotencyKey}::uuid, ${input.commandId}::uuid, ${input.requestHash}
+          )
+        `
+        return answered(row?.template, 'duplicate the session template')
+      }),
+
     readMyUnpublishedProgram: (input) =>
       transact(sql, input.personId, input.requestId, async (transaction) => {
         const [row] = await transaction<{ program: Program | null }[]>`
@@ -420,6 +433,8 @@ function summary(row: CatalogueRow): StoredProgramSummary {
     levels: row.levels as StoredProgramSummary['levels'],
     emphases: row.emphases as StoredProgramSummary['emphases'],
     cover_object_key: row.cover_object_key,
+    locked: row.locked,
+    unlock_feature: row.unlock_feature,
   }
 }
 

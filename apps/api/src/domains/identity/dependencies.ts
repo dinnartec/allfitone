@@ -1,8 +1,12 @@
 /** Identity module composition. */
 
 import { randomUUID } from 'node:crypto'
+import { createObjectStoreFromEnv } from '@allfitone/object-store'
 
 import { authProvider } from '../../platform/auth/index.js'
+import { createSharpSanitizer } from '../../platform/media/photo.js'
+import { createBodyPhotoService, type BodyPhotoService } from './application/body-photos.js'
+import { createBodyPhotoDatabase } from './infrastructure/body-photos.js'
 import {
   createBackofficeAuthenticationService,
   type BackofficeAuthenticationService,
@@ -316,4 +320,16 @@ export function trustedStudioWebUrl(): string {
     throw new Error('STUDIO_WEB_URL must be a trusted URL without credentials, query or fragment')
   }
   return url.toString().replace(/\/$/, '')
+}
+
+let bodyPhotos: BodyPhotoService | undefined
+
+/** Body photos: their closed functions, the private store and the shared sanitiser. */
+export function spaceBodyPhotoService(): BodyPhotoService {
+  bodyPhotos ??= createBodyPhotoService(
+    createBodyPhotoDatabase(),
+    createObjectStoreFromEnv(process.env),
+    createSharpSanitizer(),
+  )
+  return bodyPhotos
 }

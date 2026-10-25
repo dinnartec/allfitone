@@ -165,6 +165,13 @@ export interface SpacePlanningDatabase {
   discardMySessionTemplate(
     input: OwnContentCommand & { personId: string; templateId: string },
   ): Promise<SessionTemplate>
+  /**
+   * The **new** routine, a draft copy of one of the person's own (OP-PLN-036). Pro opens
+   * it, and the copy counts against the plan's routines.
+   */
+  duplicateMySessionTemplate(
+    input: OwnContentCommand & { personId: string; templateId: string },
+  ): Promise<SessionTemplate>
   /** The programme somebody started and never published, or null. */
   readMyUnpublishedProgram(input: { personId: string; requestId: string }): Promise<Program | null>
   /** Archived rather than deleted; refused when a version was ever published. */

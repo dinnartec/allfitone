@@ -104,22 +104,13 @@ export interface NutritionDatabase {
     names: readonly string[]
   }): Promise<(NutritionFood | null)[]>
   /** Null when the actor is not this person. */
+  /** Raises AF402 when the person's plan does not recognise meals by photo. */
+  requireRecognition(input: { personId: string; requestId: string }): Promise<void>
   readConsent(input: { personId: string; requestId: string }): Promise<ConsentRow | null>
   acceptConsent(
     input: NutritionCommand & { personId: string; version: string },
   ): Promise<ConsentRow>
 }
 
-/** Makes a photo safe to keep: no EXIF, no location, a bounded size, one format. */
-export interface PhotoSanitizer {
-  /** `longestSide` caps the image; 1600 px when it is not said. */
-  sanitize(bytes: Uint8Array, longestSide?: number): Promise<Uint8Array>
-}
-
-/** The photo could not be read as an image, so nothing is stored (fails closed). */
-export class PhotoRejected extends Error {
-  constructor(cause: unknown) {
-    super('the photo could not be sanitised', { cause })
-    this.name = 'PhotoRejected'
-  }
-}
+// The sanitiser is shared with body photos, so it lives in the platform.
+export { PhotoRejected, type PhotoSanitizer } from '../../../platform/media/photo.js'

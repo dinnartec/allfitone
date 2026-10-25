@@ -28,12 +28,14 @@ export type SummaryRow = Omit<ExecutionSummary, 'cover_url'> & { cover_object_ke
 export type HistoryItem = AllfitV1Schemas['SpaceHistoryItem']
 export type HistoryPage = AllfitV1Schemas['SpaceHistoryPage']
 export type HistoryMonth = AllfitV1Schemas['SpaceHistoryMonth']
+export type PeriodComparison = AllfitV1Schemas['SpacePeriodComparison']
 /** A history row as PostgreSQL answers it: the thumbnail's key, never its address. */
 export type HistoryRow = Omit<HistoryItem, 'thumbnail_url'> & {
   thumbnail_object_key: string | null
 }
 export interface HistoryRowPage {
   readonly data: readonly HistoryRow[]
+  readonly window: HistoryPage['window']
   readonly page: HistoryPage['page']
 }
 export interface HistoryQuery {
@@ -165,4 +167,12 @@ export interface ExecutionDatabase {
     month: string
     requestId: string
   }): Promise<HistoryMonth>
+  /** `OP-EXE-026`. Pro: the database refuses with AF402 when the plan does not open it. */
+  comparePeriods(input: {
+    personId: string
+    timezone: string
+    period: PeriodComparison['period']
+    count: number
+    requestId: string
+  }): Promise<PeriodComparison>
 }

@@ -30,6 +30,7 @@ import type {
   Finalized,
   FinishedExecution,
   HistoryMonth,
+  PeriodComparison,
   InvalidationPreview,
   HistoryRowPage,
   SummaryRow,
@@ -318,6 +319,17 @@ export function createExecutionDatabase(): ExecutionDatabase {
         `
         if (!row) throw new Error('PostgreSQL did not read the month')
         return row.month
+      }),
+
+    comparePeriods: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        const [row] = await transaction<{ comparison: PeriodComparison }[]>`
+          select execution.compare_my_periods(
+            ${input.personId}::uuid, ${input.timezone}, ${input.period}, ${input.count}::integer
+          ) as comparison
+        `
+        if (!row) throw new Error('PostgreSQL did not compare the periods')
+        return row.comparison
       }),
   }
 }

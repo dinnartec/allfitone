@@ -66,7 +66,9 @@ describe('the nutrition bindings', () => {
 
   test('T-NUT-API-UNIT-13 the day summaries carry the zone that decides today', async () => {
     const captured: CapturedQuery[] = []
-    await setDatabase(recordingDatabase(captured, { days: { data: [], streak_days: 0 } }))
+    await setDatabase(
+      recordingDatabase(captured, { days: { data: [], streak_days: 0, visible_from: null } }),
+    )
 
     const page = await createNutritionDatabase().readDailySummaries({
       personId: PERSON,
@@ -78,6 +80,6 @@ describe('the nutrition bindings', () => {
 
     const read = captured.find((query) => query.strings.join('').includes('read_daily_summaries'))
     expect(read?.values.slice(0, 4)).toEqual([PERSON, '2026-09-24', '2026-09-30', 'America/Bogota'])
-    expect(page).toEqual({ data: [], streak_days: 0 })
+    expect(page).toEqual({ data: [], streak_days: 0, visible_from: null })
   })
 })
