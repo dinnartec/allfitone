@@ -10,18 +10,21 @@
  */
 
 import { Badge } from '@allfitone/react-native/badge'
+import { PageDots } from '@allfitone/react-native/page-dots'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useEffect, useState, type ReactNode } from 'react'
-import { Image, ScrollView, StyleSheet, View, type ImageSourcePropType } from 'react-native'
+import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native'
 import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
   ReduceMotion,
   useAnimatedProps,
+  useAnimatedReaction,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -31,6 +34,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg'
 
 import type { ComparisonRow } from '../client/plan'
@@ -100,6 +104,18 @@ export function UnlockCarousel({
 }) {
   const theme = useTheme()
   const [active, setActive] = useState(0)
+  // As on Hoy: the dots follow the finger on the UI thread, and the card in front
+  // changes when the scroll crosses half way, not when the momentum ends.
+  const at = useSharedValue(0)
+  const follow = useAnimatedScrollHandler((event) => {
+    at.set(event.contentOffset.x / (CARD_WIDTH + CARD_GAP))
+  })
+  useAnimatedReaction(
+    () => Math.min(CARDS.length - 1, Math.max(0, Math.round(at.get()))),
+    (now, before) => {
+      if (now !== before) scheduleOnRN(setActive, now)
+    },
+  )
 
   const visuals: readonly ((on: boolean) => ReactNode)[] = [
     (on) => <HistoryVisual on={on} free={plan === 'free'} />,
@@ -120,20 +136,14 @@ export function UnlockCarousel({
           {`${String(active + 1)} / ${String(CARDS.length)}`}
         </Text>
       </View>
-      <ScrollView
+      <Animated.ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={CARD_WIDTH + CARD_GAP}
         decelerationRate="fast"
         contentContainerStyle={styles.cards}
-        onMomentumScrollEnd={(event) =>
-          setActive(
-            Math.min(
-              CARDS.length - 1,
-              Math.max(0, Math.round(event.nativeEvent.contentOffset.x / (CARD_WIDTH + CARD_GAP))),
-            ),
-          )
-        }
+        onScroll={follow}
+        scrollEventThrottle={16}
       >
         {CARDS.map((card, index) => (
           <View
@@ -158,20 +168,15 @@ export function UnlockCarousel({
             </Text>
           </View>
         ))}
-      </ScrollView>
-      <View style={styles.dots}>
-        {CARDS.map((card, index) => (
-          <View
-            key={card.label}
-            style={[
-              styles.dot,
-              index === active
-                ? { width: 22, backgroundColor: theme.color.icon.accent }
-                : { backgroundColor: theme.color.border.strong },
-            ]}
-          />
-        ))}
-      </View>
+      </Animated.ScrollView>
+      <PageDots
+        count={CARDS.length}
+        active={active}
+        at={at}
+        color={theme.color.icon.accent}
+        accessibilityLabel={`Tarjeta ${String(active + 1)} de ${String(CARDS.length)}`}
+        style={styles.dots}
+      />
     </View>
   )
 }
@@ -719,8 +724,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   visual: { height: 172, justifyContent: 'center' },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  dots: { alignSelf: 'center' },
   historyVisual: { gap: 8 },
   historyCount: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   historyUnit: { paddingBottom: 6 },
