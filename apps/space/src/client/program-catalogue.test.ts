@@ -38,6 +38,8 @@ function program(overrides: Partial<ProgramSummary> & { id: string }): ProgramSu
     levels: ['some_practice'],
     emphases: [],
     cover_url: null,
+    locked: false,
+    unlock_feature: null,
     ...rest,
   }
 }

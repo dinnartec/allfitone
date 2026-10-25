@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  type SessionTemplate,
   collapseBaseWeek,
   createContentFlow,
   expandBaseWeek,
@@ -60,6 +61,9 @@ function harness(overrides: Partial<ContentTransport> = {}) {
     },
     readTemplateDraft: async () => ({}) as never,
     discardTemplate: async () => ({}) as never,
+    duplicateTemplate: async () => {
+      throw new Error('not used')
+    },
     discardProgram: async () => ({}) as never,
     removeProgram: async (headers, programId, withRoutines) => {
       sent.push({ command: headers.idempotencyKey, programId, withRoutines })
@@ -363,6 +367,41 @@ describe('eliminar y duplicar un programa', () => {
         const commands = sent.slice(-2).map((one) => one.command)
         expect(commands[0]).not.toBe(commands[1])
       })
+  })
+})
+
+describe('duplicating a routine', () => {
+  test('T-SP-ROUTINE-DUP-01 duplicating twice makes two copies of the routine named', async () => {
+    const asked: { command: string; templateId: string }[] = []
+    const copy: SessionTemplate = {
+      id: 'copy',
+      organization_id: null,
+      discipline_code: 'strength',
+      status: 'draft',
+      author_person_id: 'person',
+      versions: [],
+      draft: {
+        id: 'draft',
+        template_id: 'copy',
+        content_schema_version: 1,
+        content: { title: 'Tres - Copia', activity_type_id: null, steps: [] },
+        derived_from_version_id: null,
+        etag: 'etag',
+        updated_at: '2026-10-25T00:00:00.000Z',
+      },
+    }
+    const { flow } = harness({
+      duplicateTemplate: async (headers, templateId) => {
+        asked.push({ command: headers.idempotencyKey, templateId })
+        return copy
+      },
+    })
+
+    await flow.duplicateTemplate('routine-1')
+    await flow.duplicateTemplate('routine-1')
+
+    expect(asked.map((one) => one.templateId)).toEqual(['routine-1', 'routine-1'])
+    expect(asked[0]?.command).not.toBe(asked[1]?.command)
   })
 })
 

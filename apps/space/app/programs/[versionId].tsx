@@ -60,6 +60,7 @@ import { ZONE_LABEL } from '../../src/components/program-card'
 import { DayCard, ExerciseCard, Figure } from '../../src/components/program-detail'
 import { programNutritionCopy } from '../../src/client/program-nutrition'
 import { ProgramNutritionCard } from '../../src/components/program-nutrition-card'
+import { usePlan, useUpgradeSheet } from '../../src/components/upgrade-sheet'
 
 /** Lo que ocupa la fotografía del programa. La del lienzo, sobre un alto de 844. */
 const HERO = 252
@@ -122,6 +123,9 @@ export default function ProgramVersion() {
     }
   }, [content, flow, versionId])
 
+  const features = usePlan()
+  const upgrade = useUpgradeSheet(features)
+
   const take = async () => {
     if (!detail) return
     setChoosing(true)
@@ -134,6 +138,7 @@ export default function ProgramVersion() {
       })
       router.replace('/today')
     } catch (cause: unknown) {
+      if (upgrade.handled(cause)) return
       if (cause instanceof ApiError && cause.failure === 'unauthenticated') {
         setSessionExpired(true)
         setFailure(EXPIRED)
@@ -366,6 +371,7 @@ export default function ProgramVersion() {
           </Text>
         </View>
       ) : null}
+      {upgrade.sheet}
     </Screen>
   )
 }

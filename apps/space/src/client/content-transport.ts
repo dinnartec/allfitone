@@ -137,6 +137,15 @@ export function createSpaceContentFlow(): ContentFlow {
             token,
           ),
         ),
+      duplicateTemplate: (command, templateId) =>
+        authenticated((token) =>
+          authorizedPost<SessionTemplate>(
+            `/space/v1/session-templates/${templateId}/duplicate`,
+            command,
+            undefined,
+            token,
+          ),
+        ),
       readProgramDraft: (programId) =>
         authenticated((token) =>
           authorizedGet<ProgramDraft>(`/space/v1/programs/${programId}/draft`, token),

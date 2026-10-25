@@ -33,9 +33,17 @@ export type ApiFailure =
   | 'forbidden'
   /** The API or the provider did not answer. Retryable; nothing else is. */
   | 'unavailable'
+  /**
+   * The person's plan does not open this, or its limit was reached (DT-018). The error
+   * carries the function, so the screen offers Pro for exactly that.
+   */
+  | 'plan-limit'
 
 export class ApiError extends Error {
-  constructor(readonly failure: ApiFailure) {
+  constructor(
+    readonly failure: ApiFailure,
+    readonly feature?: string,
+  ) {
     super(failure)
     this.name = 'ApiError'
   }
@@ -49,4 +57,22 @@ export function failureFor(status: number): ApiFailure {
   if (status === 409) return 'conflict'
   if (status === 422) return 'validation-failed'
   return 'unavailable'
+}
+
+const PLAN_LIMIT = 'https://errors.allfit.invalid/plan-limit-reached'
+
+/** The error a refused response means, reading the problem only for a plan limit. */
+export async function apiErrorFrom(response: Response): Promise<ApiError> {
+  if (response.status !== 403) return new ApiError(failureFor(response.status))
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    return new ApiError('forbidden')
+  }
+  if (typeof body === 'object' && body !== null && 'type' in body && body.type === PLAN_LIMIT) {
+    const feature = 'feature' in body ? body.feature : undefined
+    if (typeof feature === 'string') return new ApiError('plan-limit', feature)
+  }
+  return new ApiError('forbidden')
 }

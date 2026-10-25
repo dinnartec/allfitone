@@ -68,6 +68,8 @@ import { deviceTimezone } from '../../src/client/timezone'
 import { RoutineMark } from '../../src/components/routine-mark'
 import { ProgramMenuBody, ProgramRemovalBody } from '../../src/components/program-sheets'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
+import { usePlan, useUpgradeSheet } from '../../src/components/upgrade-sheet'
+import { opens } from '../../src/client/plan'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 const READ_FAILED = 'No pudimos cargar tu biblioteca. Inténtalo otra vez.'
@@ -75,6 +77,7 @@ const START_FAILED = 'No pudimos empezar la sesión. Inténtalo otra vez.'
 const ORDER_FAILED = 'No pudimos cambiar de programa. Inténtalo otra vez.'
 const REMOVE_FAILED = 'No pudimos eliminar el programa. Inténtalo otra vez.'
 const DUPLICATE_FAILED = 'No pudimos duplicar el programa. Inténtalo otra vez.'
+const DUPLICATE_ROUTINE_FAILED = 'No pudimos duplicar la rutina. Inténtalo otra vez.'
 
 /**
  * Lo que la hoja puede estar enseñando. Sólo uno a la vez, que es la regla que la
@@ -106,6 +109,8 @@ export default function Train() {
   const theme = useTheme()
   const programs = useMemo(() => createSpaceProgramFlow(), [])
   const content = useMemo(() => createSpaceContentFlow(), [])
+  const features = usePlan()
+  const upgrade = useUpgradeSheet(features)
   const training = useMemo(() => createSpaceExecutionFlow(), [])
   const timezone = useMemo(() => deviceTimezone(), [])
 
@@ -246,6 +251,21 @@ export default function Train() {
       .duplicateProgram(program.program_id)
       .then((copy) => router.push(`/programs/new?programId=${copy.id}`))
       .catch(() => setFailure(DUPLICATE_FAILED))
+  }
+
+  // Pro opens it; on the free plan the sheet explains instead of a refusal.
+  const duplicateRoutine = (routine: MyRoutine) => {
+    setSheet(undefined)
+    if (!opens(features, 'routine_duplication')) {
+      upgrade.offer('routine_duplication')
+      return
+    }
+    content
+      .duplicateTemplate(routine.template_id)
+      .then((copy) => router.push(`/routines/${copy.id}`))
+      .catch((cause: unknown) => {
+        if (!upgrade.handled(cause)) setFailure(DUPLICATE_ROUTINE_FAILED)
+      })
   }
 
   const discard = (routine: MyRoutine) => {
@@ -459,6 +479,12 @@ export default function Train() {
                 router.push(`/routines/${chosen.template_id}`)
               }}
             />
+            <Button
+              label="Duplicar"
+              variant="secondary"
+              icon={opens(features, 'routine_duplication') ? 'duplicate' : 'locked'}
+              onPress={() => duplicateRoutine(sheet.routine)}
+            />
             {/* Lo que se pierde, dicho antes de perderlo. Una rutina que está en un
                 programa se archiva igual, pero los programas que la usan se quedan con la
                 versión que congelaron, y eso hay que decirlo en vez de dejar que se
@@ -498,6 +524,7 @@ export default function Train() {
           />
         ) : null}
       </Sheet>
+      {upgrade.sheet}
     </Screen>
   )
 }

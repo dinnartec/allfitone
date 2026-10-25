@@ -54,7 +54,7 @@ export function ProgramCard({
       accessibilityRole="button"
       accessibilityLabel={`${program.title}. ${programCaption(program)}. ${
         program.weeks === null ? 'Sin fecha de fin' : `${program.weeks} semanas`
-      }${suggested ? '. Sugerido para ti' : ''}`}
+      }${suggested ? '. Sugerido para ti' : ''}${program.locked ? '. Con Pro' : ''}`}
       accessibilityState={{ disabled, busy }}
       disabled={disabled}
       onPress={onPress}
@@ -80,6 +80,22 @@ export function ProgramCard({
 
       <View style={[styles.body, suggested ? styles.belowBadge : null]}>
         <View style={styles.copy}>
+          {program.locked ? (
+            <View
+              style={[
+                styles.lock,
+                {
+                  backgroundColor: theme.color.accent.tonal,
+                  borderColor: theme.color.accent.tonalBorder,
+                },
+              ]}
+            >
+              <FoundationIcon name="locked" size="xs" color={theme.color.icon.accent} decorative />
+              <Text role="control" size="2xs" color="accent">
+                Pro
+              </Text>
+            </View>
+          ) : null}
           <Text role="display" size="xl" uppercase>
             {program.title}
           </Text>
@@ -126,6 +142,16 @@ export function ProgramCard({
 
 const styles = StyleSheet.create({
   card: { borderRadius: 18, padding: 16, gap: 10, minHeight: 44 },
+  lock: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
   // Hangs from the top edge with only its bottom corners rounded, sitting on the
   // border rather than inside the padding.
   badge: {

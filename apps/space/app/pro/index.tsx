@@ -117,6 +117,12 @@ export function ProPlan({ flow }: { readonly flow: ProFlow }) {
   }
 
   const links: PanelLink[] = []
+  links.push({
+    icon: 'overview',
+    title: 'Qué incluye cada plan',
+    caption: 'Gratis y Pro, lado a lado',
+    onPress: () => router.push('/pro/plans'),
+  })
   if (subscription || charges.length > 0) {
     links.push({
       icon: 'history',

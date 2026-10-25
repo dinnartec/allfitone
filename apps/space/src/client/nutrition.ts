@@ -440,7 +440,7 @@ export function averageOfLogged(
   days: readonly DailySummary[],
   code: NutrientCode,
 ): { readonly value: number | null; readonly days: number } {
-  const logged = days.filter((one) => one.meal_count > 0)
+  const logged = days.filter((one) => (one.meal_count ?? 0) > 0)
   const values = logged
     .map((one) => one.nutrient_totals.find((total) => total.nutrient_code === code)?.value)
     .filter((value): value is number => value !== undefined)

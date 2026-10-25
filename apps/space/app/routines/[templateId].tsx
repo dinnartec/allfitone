@@ -121,6 +121,7 @@ import {
 } from '../../src/client/set-scheme'
 import { ScreenHeader } from '../../src/components/screen-header'
 import { SheetChoice } from '../../src/components/sheet-choice'
+import { refusedFeature, usePlan, useUpgradeSheet } from '../../src/components/upgrade-sheet'
 
 const SUGGESTIONS = ['Empuje', 'Tirón', 'Pierna', 'Full body']
 
@@ -190,10 +191,15 @@ const LOAD_FAILED = 'No pudimos abrir el borrador. Revisa tu conexión.'
 
 const EXPIRED = 'Tu sesión venció. Vuelve a entrar para continuar.'
 
+const ROUTINE_LIMIT = 'Tu plan llegó a su límite de rutinas propias. Lo que escribiste sigue aquí.'
+
 export default function RoutineEditor() {
   const router = useRouter()
   const theme = useTheme()
   const flow = useMemo(() => createSpaceContentFlow(), [])
+  const features = usePlan()
+  const upgrade = useUpgradeSheet(features)
+  const offerPro = upgrade.offer
   const saves = useMemo(() => createQueue(), [])
   const params = useLocalSearchParams<{ templateId: string }>()
 
@@ -348,6 +354,13 @@ export default function RoutineEditor() {
           setFailure(undefined)
           return true
         } catch (cause: unknown) {
+          // A fourth routine on the free plan: nothing is lost, the sheet says why.
+          const feature = refusedFeature(cause)
+          if (feature) {
+            offerPro(feature)
+            setFailure(ROUTINE_LIMIT)
+            return false
+          }
           setFailure(saveFailure(cause))
           return false
         } finally {
@@ -355,7 +368,7 @@ export default function RoutineEditor() {
         }
       })
     },
-    [flow, loaded, saves],
+    [flow, loaded, saves, offerPro],
   )
 
   /**
@@ -1059,6 +1072,7 @@ export default function RoutineEditor() {
           </View>
         ) : null}
       </Sheet>
+      {upgrade.sheet}
     </Screen>
   )
 }

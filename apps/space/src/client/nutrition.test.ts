@@ -78,6 +78,7 @@ const meal = (overrides: Partial<NutritionMeal> = {}): NutritionMeal => ({
 
 const day = (local_date: string, energy: number | null, meals = 1): DailySummary => ({
   local_date,
+  hidden: false,
   meal_count: energy === null ? 0 : meals,
   nutrient_totals:
     energy === null ? [] : [{ nutrient_code: 'energy', value: energy, unit: 'kcal' }],
@@ -187,6 +188,7 @@ describe('deleting a meal (N-4c)', () => {
   test('T-SPC-UNIT-210 the day as it will be, the meal taken out of it', () => {
     const today: DailySummary = {
       local_date: '2026-09-30',
+      hidden: false,
       meal_count: 3,
       nutrient_totals: [
         { nutrient_code: 'energy', value: 1420, unit: 'kcal' },

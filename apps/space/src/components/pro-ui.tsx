@@ -154,9 +154,13 @@ export function FeatureList({
       </Note>
     )
   }
+  const listed = features.flatMap((feature) => {
+    const sentence = featureSentence(feature)
+    return sentence ? [{ feature, sentence }] : []
+  })
   return (
     <View>
-      {features.map((feature, index) => (
+      {listed.map(({ feature, sentence }, index) => (
         <View
           key={feature.code}
           style={[
@@ -170,13 +174,8 @@ export function FeatureList({
             color={pro ? theme.color.icon.accent : theme.color.icon.secondary}
             decorative
           />
-          <Text
-            role="body"
-            size="sm"
-            color={feature.enabled ? 'primary' : 'secondary'}
-            style={styles.grow}
-          >
-            {featureSentence(feature)}
+          <Text role="body" size="sm" style={styles.grow}>
+            {sentence}
           </Text>
         </View>
       ))}

@@ -119,33 +119,45 @@ export function gymWarning(status: ProStatus): string | undefined {
 
 export const WAITING_FOR_FEATURES = 'Muy pronto verás aquí cada función de Pro y su límite.'
 
+const historySentence = (what: string) => (limit: number | null) =>
+  limit === null
+    ? `Todo tu ${what}`
+    : limit === 1
+      ? `${what.charAt(0).toUpperCase()}${what.slice(1)} del último mes`
+      : `${what.charAt(0).toUpperCase()}${what.slice(1)} de los últimos ${String(limit)} meses`
+
 // What each known function says at a given limit; `null` is unlimited.
 const SENTENCES: Readonly<Record<string, (limit: number | null) => string>> = {
-  active_programs: (limit) =>
+  active_personal_programs: (limit) =>
     limit === null
-      ? 'Programas activos sin límite'
-      : `Máximo ${limit} ${limit === 1 ? 'programa activo' : 'programas activos'}`,
+      ? 'Programas propios sin límite'
+      : `Máximo ${String(limit)} ${limit === 1 ? 'programa propio activo' : 'programas propios activos'}`,
   own_routines: (limit) =>
     limit === null
       ? 'Rutinas propias sin límite'
-      : `Máximo ${limit} ${limit === 1 ? 'rutina' : 'rutinas'}`,
-  history_months: (limit) =>
-    limit === null
-      ? 'Todo tu historial'
-      : limit === 1
-        ? 'Historial del último mes'
-        : `Historial de los últimos ${limit} meses`,
-  meal_photos: () => 'Comidas por foto y por búsqueda',
+      : `Máximo ${String(limit)} ${limit === 1 ? 'rutina propia' : 'rutinas propias'}`,
+  training_history_months: historySentence('historial'),
+  nutrition_history_months: historySentence('historial de comidas'),
+  routine_duplication: () => 'Duplicar rutinas',
+  full_program_catalogue: () => 'Todo el catálogo de programas',
+  period_analysis: () => 'Comparar tus periodos',
+  body_measurements: () => 'Todas tus medidas',
+  body_photos: () => 'Fotos de tu progreso',
+  meal_photo_recognition: () => 'Comidas por foto con IA',
 }
 
-// When a function is left out of a plan, what the person still has instead.
+// When a function is left out of a plan, what the person still has instead. A function
+// with nothing in its place is not listed: «Lo que incluye» names only what is included.
 const WITHOUT: Readonly<Record<string, string>> = {
-  meal_photos: 'Comidas solo por búsqueda de alimentos',
+  full_program_catalogue: 'Una selección de programas',
+  period_analysis: 'Resumen de cada sesión',
+  body_measurements: 'Peso y estatura',
+  meal_photo_recognition: 'Comidas por búsqueda de alimentos',
 }
 
-/** One function as a sentence: «Máximo 1 programa activo», «Todo tu historial». */
-export function featureSentence(feature: ProFeature): string {
-  if (!feature.enabled) return WITHOUT[feature.code] ?? `${feature.name}: no incluido`
+/** One function as a sentence; undefined for one the plan leaves out with nothing instead. */
+export function featureSentence(feature: ProFeature): string | undefined {
+  if (!feature.enabled) return WITHOUT[feature.code]
   const sentence = SENTENCES[feature.code]
   if (sentence) return sentence(feature.limit_value)
   return feature.limit_value === null
@@ -154,10 +166,16 @@ export function featureSentence(feature: ProFeature): string {
 }
 
 const FEATURE_ICONS: Readonly<Record<string, IconName>> = {
-  active_programs: 'training',
+  active_personal_programs: 'training',
   own_routines: 'checklist',
-  meal_photos: 'camera',
-  history_months: 'progress',
+  routine_duplication: 'duplicate',
+  full_program_catalogue: 'explore',
+  training_history_months: 'history',
+  nutrition_history_months: 'nutrition',
+  period_analysis: 'progress',
+  body_measurements: 'weight',
+  body_photos: 'image',
+  meal_photo_recognition: 'camera',
 }
 
 /** The icon of a function; one the app does not know yet gets a neutral mark. */
