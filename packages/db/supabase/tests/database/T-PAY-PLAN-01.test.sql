@@ -89,7 +89,9 @@ from (values
     '019b4000-0000-7000-8000-000000000115'::uuid, '019b4000-0000-7000-8000-000000000215'::uuid, '75')
 ) as duty_row(person_id, duty_code, key, command, hash_byte);
 
--- The catalogue ships empty until product decides it; these two exist only here.
+-- This file proves how plans are published and read against a catalogue of its own, so
+-- the real one is set aside inside the transaction; T-PAY-FEATURE-01 covers the real one.
+delete from payments.platform_features;
 insert into payments.platform_features (code, name, unit)
 values
   ('meal_logs_per_day', 'Comidas registradas por día', 'items'),
