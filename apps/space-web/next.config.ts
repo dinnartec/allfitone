@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
     formats: ['image/avif', 'image/webp'],
+    // Programme covers fill tall cards; 75 smears their dark gradients.
+    qualities: [75, 88],
   },
 }
 

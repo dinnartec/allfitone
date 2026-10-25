@@ -161,6 +161,7 @@ export default async function Landing({ params }: LocaleParams) {
                         src={PROGRAM_PHOTOS[index]}
                         alt=""
                         fill
+                        quality={88}
                         sizes="(max-width: 1080px) 72vw, 310px"
                       />
                     ) : null}
