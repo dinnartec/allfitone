@@ -13,6 +13,7 @@ import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
+import { semanticMotion } from '@allfitone/react-native/tokens'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -98,7 +99,8 @@ export function UpgradeSheet({
           label="Comparar Gratis y Pro"
           onPress={() => {
             onDismiss()
-            router.push('/pro/plans')
+            // After the sheet has left: iOS leaves a closing modal over the new screen.
+            setTimeout(() => router.push('/pro/plans'), semanticMotion.exit.duration + 60)
           }}
         />
         <Button label="Ahora no" variant="ghost" onPress={onDismiss} />

@@ -27,6 +27,7 @@ import { SelectableTile } from '@allfitone/react-native/selectable-tile'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
+import { semanticMotion } from '@allfitone/react-native/tokens'
 import type { IconName } from '@allfitone/icons'
 import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
@@ -61,6 +62,8 @@ import { BodyFigure } from '../../src/components/body-figure'
 import { CardGlow, FIGURE_TRACKING } from '../../src/components/nutrition-ui'
 import { usePlan, useUpgradeSheet } from '../../src/components/upgrade-sheet'
 
+/** A frame past the sheet's exit, so its modal is gone before the next thing appears. */
+const SHEET_SETTLE_MS = 60
 const READ_FAILED = 'No pudimos cargar tus medidas. Inténtalo otra vez.'
 const CHART_HEIGHT = 110
 const FIGURE_SCALE = 0.78
@@ -152,12 +155,18 @@ export default function BodyScreen() {
   )
 
   const record = (path: '/body/weight' | '/body/measures' | '/body/photo', feature?: string) => {
-    setChoosing(false)
-    if (feature && !opens(features, feature)) {
-      upgrade.offer(feature)
+    const go = () => {
+      if (feature && !opens(features, feature)) upgrade.offer(feature)
+      else router.push(path)
+    }
+    if (!choosing) {
+      go()
       return
     }
-    router.push(path)
+    // iOS cannot present a screen or a sheet while the «Registrar» modal is still
+    // leaving: it stays mounted, invisible, over everything and swallows every touch.
+    setChoosing(false)
+    setTimeout(go, semanticMotion.exit.duration + SHEET_SETTLE_MS)
   }
 
   return (

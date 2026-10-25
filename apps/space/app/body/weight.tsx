@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
   unit: { paddingBottom: 14 },
   recent: { borderRadius: 22, borderWidth: 1, padding: 16, gap: 12 },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 68 },
-  barColumn: { flex: 1, alignItems: 'center', gap: 4 },
-  bar: { width: '100%', borderRadius: 6 },
+  barColumn: { width: 30, alignItems: 'center', gap: 4 },
+  bar: { width: 30, borderRadius: 6 },
   footer: { paddingHorizontal: 20, paddingBottom: 12 },
   days: { gap: 8 },
 })
