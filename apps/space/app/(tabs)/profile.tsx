@@ -37,8 +37,10 @@ import { createSpaceProFlow } from '../../src/client/pro-transport'
 import { initialsOf, paymentsCaption, planCaption } from '../../src/client/profile'
 import type { SignOutFlow } from '../../src/client/sign-out'
 import { createSpaceSignOutFlow } from '../../src/client/sign-out-transport'
+import { latestOf, tenths } from '../../src/client/body'
+import { readBodyRecords } from '../../src/client/body-transport'
 import { deviceTimezone } from '../../src/client/timezone'
-import { PlanCard, ProfileGroup, ProfileRow } from '../../src/components/profile-ui'
+import { PlanCard, ProfileGroup, ProfileRow, ProTeaser } from '../../src/components/profile-ui'
 import { DOCK_HEIGHT } from '../../src/components/tab-bar'
 
 const LOCAL_ONLY =
@@ -47,6 +49,8 @@ const LOCAL_ONLY =
 export interface ProfileSources {
   readonly readName: () => Promise<string>
   readonly readPlan: () => Promise<ProStatus>
+  /** The latest weight, already worded; undefined when none was ever recorded. */
+  readonly readWeight: () => Promise<string | undefined>
   readonly signOut: SignOutFlow
 }
 
@@ -58,6 +62,11 @@ export default function ProfileRoute() {
       readName: () =>
         training.readToday(deviceTimezone()).then((today) => today.profile.given_name),
       readPlan: () => pro.read(),
+      readWeight: () =>
+        readBodyRecords().then((records) => {
+          const latest = latestOf(records, 'body_weight')
+          return latest ? `${tenths(latest.value)} kg` : undefined
+        }),
       signOut: createSpaceSignOutFlow(),
     }
   }, [])
@@ -70,6 +79,7 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
   const theme = useTheme()
   const [name, setName] = useState('')
   const [plan, setPlan] = useState<ProStatus | undefined>(undefined)
+  const [weight, setWeight] = useState<string | undefined>(undefined)
 
   useFocusEffect(
     useCallback(() => {
@@ -82,6 +92,10 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
       sources
         .readPlan()
         .then((read) => active && setPlan(read))
+        .catch(() => undefined)
+      sources
+        .readWeight()
+        .then((read) => active && setWeight(read))
         .catch(() => undefined)
       return () => {
         active = false
@@ -170,18 +184,28 @@ export function ProfileScreen({ sources }: { readonly sources: ProfileSources })
             onPress={() => router.push('/pro')}
           />
         ) : null}
+        {plan && !plan.is_pro ? <ProTeaser onPress={() => router.push('/pro/plans')} /> : null}
 
         <ProfileGroup label="Tú">
+          <ProfileRow
+            icon="progress"
+            title="Progreso"
+            caption="Tu entrenamiento, semana a semana"
+            end="open"
+            onPress={() => router.push('/progress')}
+          />
+          <ProfileRow
+            icon="person"
+            title="Cuerpo"
+            caption="Peso, medidas y fotos"
+            end="open"
+            value={weight}
+            onPress={() => router.push('/body')}
+          />
           <ProfileRow
             icon="person"
             title="Perfil fitness"
             caption="Objetivo, experiencia y medidas"
-            end="soon"
-          />
-          <ProfileRow
-            icon="progress"
-            title="Progreso corporal"
-            caption="Medidas y fotos"
             end="soon"
           />
           <ProfileRow
