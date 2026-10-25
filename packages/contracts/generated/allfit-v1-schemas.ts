@@ -1712,9 +1712,67 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   },
   BodyMetric: {
     type: 'string',
-    enum: ['body_weight', 'body_height'],
+    enum: [
+      'body_weight',
+      'body_height',
+      'muscle_mass',
+      'body_fat',
+      'waist',
+      'hip',
+      'chest',
+      'arm',
+      'thigh',
+    ],
     description:
-      'The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.',
+      'The metrics a person records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person. Weight and height are free; the rest are Pro (`body_measurements`).',
+  },
+  BodyPhoto: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id', 'taken_on', 'created_at', 'photo'],
+    properties: {
+      id: {
+        $ref: '#/components/schemas/UuidV7',
+      },
+      taken_on: {
+        type: 'string',
+        format: 'date',
+      },
+      created_at: {
+        type: 'string',
+        format: 'date-time',
+      },
+      photo: {
+        $ref: '#/components/schemas/SignedMediaUrl',
+      },
+    },
+  },
+  BodyPhotoCreate: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['taken_on', 'photo'],
+    properties: {
+      taken_on: {
+        type: 'string',
+        format: 'date',
+      },
+      photo: {
+        $ref: '#/components/schemas/NutritionPhotoUpload',
+      },
+    },
+  },
+  BodyPhotoPage: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['data'],
+    properties: {
+      data: {
+        type: 'array',
+        items: {
+          $ref: '#/components/schemas/BodyPhoto',
+        },
+      },
+    },
   },
   BodyProgressDeletion: {
     type: 'object',
@@ -5198,9 +5256,10 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   NutritionDailySummary: {
     type: 'object',
     additionalProperties: false,
-    required: ['local_date', 'meal_count', 'nutrient_totals', 'applied_scope'],
+    required: ['local_date', 'hidden', 'meal_count', 'nutrient_totals', 'applied_scope'],
     example: {
       local_date: '2026-07-28',
+      hidden: false,
       meal_count: 3,
       nutrient_totals: [
         {
@@ -5221,8 +5280,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         format: 'date',
       },
+      hidden: {
+        type: 'boolean',
+        description:
+          "True for a day before the window the person's plan shows. Its meals are kept; the day carries no count and no totals instead of reading as an empty day.",
+      },
       meal_count: {
-        type: 'integer',
+        type: ['integer', 'null'],
         minimum: 0,
       },
       nutrient_totals: {
@@ -5247,8 +5311,13 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   NutritionDailySummaryPage: {
     type: 'object',
     additionalProperties: false,
-    required: ['data', 'streak_days'],
+    required: ['data', 'streak_days', 'visible_from'],
     properties: {
+      visible_from: {
+        type: ['string', 'null'],
+        format: 'date',
+        description: "The first day the person's plan shows; null when nothing is hidden.",
+      },
       streak_days: {
         type: 'integer',
         minimum: 0,
@@ -8362,6 +8431,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/ValidationIssue',
         },
       },
+      feature: {
+        type: 'string',
+        pattern: '^[a-z][a-z0-9_]{1,63}$',
+        description:
+          "Only on `plan-limit-reached`: the function of the plan catalogue that the person's plan does not open or whose limit was reached (DT-018).",
+      },
       current_state: {
         description: 'Current server draft returned only for stale-draft conflicts.',
         oneOf: [
@@ -10286,6 +10361,31 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       'Null declines. It is a value the request must carry explicitly, not an omission, because the server records that the question was answered even when no sex was given — otherwise a screen that skips itself once answered would ask a decliner again on every cold start.',
   },
+  SpaceBodyFatDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    description: 'Pro (`body_measurements`).',
+    properties: {
+      metric_code: {
+        type: 'string',
+        const: 'body_fat',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        maximum: 100,
+      },
+      unit: {
+        type: 'string',
+        const: 'percent',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
   SpaceBodyHeightDeclaration: {
     type: 'object',
     additionalProperties: false,
@@ -10301,6 +10401,52 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       },
       unit: {
         $ref: '#/components/schemas/LengthUnit',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
+  SpaceBodyLengthDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    description: 'Pro (`body_measurements`).',
+    properties: {
+      metric_code: {
+        type: 'string',
+        enum: ['waist', 'hip', 'chest', 'arm', 'thigh'],
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      unit: {
+        $ref: '#/components/schemas/LengthUnit',
+      },
+      measured_on: {
+        type: 'string',
+        format: 'date',
+      },
+    },
+  },
+  SpaceBodyMassDeclaration: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['metric_code', 'value', 'unit', 'measured_on'],
+    description: 'Pro (`body_measurements`).',
+    properties: {
+      metric_code: {
+        type: 'string',
+        const: 'muscle_mass',
+      },
+      value: {
+        type: 'number',
+        exclusiveMinimum: 0,
+      },
+      unit: {
+        $ref: '#/components/schemas/MassUnit',
       },
       measured_on: {
         type: 'string',
@@ -10369,12 +10515,28 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       {
         $ref: '#/components/schemas/SpaceBodyHeightDeclaration',
       },
+      {
+        $ref: '#/components/schemas/SpaceBodyMassDeclaration',
+      },
+      {
+        $ref: '#/components/schemas/SpaceBodyLengthDeclaration',
+      },
+      {
+        $ref: '#/components/schemas/SpaceBodyFatDeclaration',
+      },
     ],
     discriminator: {
       propertyName: 'metric_code',
       mapping: {
         body_weight: '#/components/schemas/SpaceBodyWeightDeclaration',
         body_height: '#/components/schemas/SpaceBodyHeightDeclaration',
+        muscle_mass: '#/components/schemas/SpaceBodyMassDeclaration',
+        waist: '#/components/schemas/SpaceBodyLengthDeclaration',
+        hip: '#/components/schemas/SpaceBodyLengthDeclaration',
+        chest: '#/components/schemas/SpaceBodyLengthDeclaration',
+        arm: '#/components/schemas/SpaceBodyLengthDeclaration',
+        thigh: '#/components/schemas/SpaceBodyLengthDeclaration',
+        body_fat: '#/components/schemas/SpaceBodyFatDeclaration',
       },
     },
     description:
@@ -11152,6 +11314,7 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     additionalProperties: false,
     required: [
       'month',
+      'visible_from',
       'sessions',
       'trained_seconds',
       'work_sets',
@@ -11167,6 +11330,12 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         type: 'string',
         format: 'date',
         description: 'The first day of the month.',
+      },
+      visible_from: {
+        type: ['string', 'null'],
+        format: 'date',
+        description:
+          "The first day the person's plan shows; sessions before it are kept and left out. Null when nothing is hidden.",
       },
       sessions: {
         type: 'integer',
@@ -11231,8 +11400,11 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
   SpaceHistoryPage: {
     type: 'object',
     additionalProperties: false,
-    required: ['data', 'page'],
+    required: ['data', 'window', 'page'],
     properties: {
+      window: {
+        $ref: '#/components/schemas/SpaceHistoryWindow',
+      },
       data: {
         type: 'array',
         items: {
@@ -11270,6 +11442,23 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         minimum: 0,
         description:
           'Of those planned, how many were finished that week, each once however many times it was done.',
+      },
+    },
+  },
+  SpaceHistoryWindow: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['visible_from', 'has_hidden'],
+    description:
+      "Where the visible history starts under the person's plan, and whether older sessions are kept behind it. Nothing outside the window is deleted: with Pro it is seen again.",
+    properties: {
+      visible_from: {
+        type: ['string', 'null'],
+        format: 'date',
+        description: 'The first visible day; null when nothing is hidden.',
+      },
+      has_hidden: {
+        type: 'boolean',
       },
     },
   },
@@ -11796,6 +11985,139 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
     description:
       "The email is absent on purpose. It is the credential's address, it already travels with the session, and changing it is another operation with its own verification.",
   },
+  SpacePeriod: {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'starts_on',
+      'sessions',
+      'active_days',
+      'trained_seconds',
+      'work_sets',
+      'volume_kg',
+      'planned',
+      'fulfilled',
+      'muscles',
+    ],
+    properties: {
+      starts_on: {
+        type: 'string',
+        format: 'date',
+      },
+      sessions: {
+        type: 'integer',
+        minimum: 0,
+      },
+      active_days: {
+        type: 'integer',
+        minimum: 0,
+      },
+      trained_seconds: {
+        type: 'integer',
+        minimum: 0,
+      },
+      work_sets: {
+        type: 'integer',
+        minimum: 0,
+      },
+      volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      planned: {
+        type: 'integer',
+        minimum: 0,
+      },
+      fulfilled: {
+        type: 'integer',
+        minimum: 0,
+      },
+      muscles: {
+        type: 'array',
+        description:
+          "How the period's work sets fall across the muscles, heaviest first. A set belongs to one muscle, the movement's primary, as in a routine's own count.",
+        items: {
+          $ref: '#/components/schemas/SpacePeriodMuscle',
+        },
+      },
+    },
+  },
+  SpacePeriodComparison: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['period', 'periods', 'movements'],
+    properties: {
+      period: {
+        type: 'string',
+        enum: ['week', 'month'],
+      },
+      periods: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 12,
+        items: {
+          $ref: '#/components/schemas/SpacePeriod',
+        },
+      },
+      movements: {
+        type: 'array',
+        description: "Each movement's best in its latest period, best first.",
+        items: {
+          $ref: '#/components/schemas/SpacePeriodMovement',
+        },
+      },
+    },
+  },
+  SpacePeriodMovement: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['movement_id', 'name', 'best_kg', 'previous_best_kg', 'change_kg', 'bests'],
+    properties: {
+      movement_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      name: {
+        type: 'string',
+      },
+      best_kg: {
+        type: 'number',
+        minimum: 0,
+      },
+      previous_best_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
+      },
+      change_kg: {
+        type: ['number', 'null'],
+      },
+      bests: {
+        type: 'array',
+        description:
+          "The movement's best in every period, oldest first; null where it was not trained.",
+        items: {
+          type: ['number', 'null'],
+          minimum: 0,
+        },
+      },
+    },
+  },
+  SpacePeriodMuscle: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'name', 'sets'],
+    properties: {
+      code: {
+        type: 'string',
+      },
+      name: {
+        type: 'string',
+      },
+      sets: {
+        type: 'integer',
+        minimum: 1,
+      },
+    },
+  },
   SpaceProFeature: {
     type: 'object',
     additionalProperties: false,
@@ -12297,10 +12619,22 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'levels',
       'emphases',
       'cover_url',
+      'locked',
+      'unlock_feature',
     ],
     description:
       'A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version.',
     properties: {
+      locked: {
+        type: 'boolean',
+        description:
+          "True when the person's plan does not open this programme: it is shown, and taking it answers `plan-limit-reached`.",
+      },
+      unlock_feature: {
+        type: ['string', 'null'],
+        description:
+          'The function of the plan catalogue that opens this programme, or null when it is in the free selection.',
+      },
       program_version_id: {
         $ref: '#/components/schemas/UuidV7',
       },

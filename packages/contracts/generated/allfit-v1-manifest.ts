@@ -602,6 +602,27 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/body-photos',
+      operationId: 'listMyBodyPhotos',
+      allfitOperation: 'OP-IDN-058',
+      responses: ['200', '401', '403'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/body-photos',
+      operationId: 'recordMyBodyPhoto',
+      allfitOperation: 'OP-IDN-056',
+      responses: ['201', '400', '401', '403', '422'],
+    },
+    {
+      method: 'DELETE',
+      path: '/space/v1/body-photos/{photoId}',
+      operationId: 'deleteMyBodyPhoto',
+      allfitOperation: 'OP-IDN-057',
+      responses: ['204', '401', '403', '404'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/body-progress',
       operationId: 'listSpaceBodyProgress',
       allfitOperation: 'OP-IDN-015',
@@ -1078,6 +1099,13 @@ export const allfitV1ContractManifest = {
     },
     {
       method: 'GET',
+      path: '/space/v1/progress/periods',
+      operationId: 'compareMyPeriods',
+      allfitOperation: 'OP-EXE-026',
+      responses: ['200', '400', '401', '403'],
+    },
+    {
+      method: 'GET',
       path: '/space/v1/relationships',
       operationId: 'listSpaceRelationships',
       allfitOperation: 'OP-REL-012',
@@ -1145,6 +1173,13 @@ export const allfitV1ContractManifest = {
       operationId: 'replaceMySessionTemplateDraft',
       allfitOperation: 'OP-PLN-002',
       responses: ['200', '400', '401', '403', '404', '409', '422'],
+    },
+    {
+      method: 'POST',
+      path: '/space/v1/session-templates/{templateId}/duplicate',
+      operationId: 'duplicateMySessionTemplate',
+      allfitOperation: 'OP-PLN-036',
+      responses: ['200', '401', '403', '404', '409'],
     },
     {
       method: 'POST',

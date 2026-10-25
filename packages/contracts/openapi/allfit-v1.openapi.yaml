@@ -7052,6 +7052,50 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /space/v1/session-templates/{templateId}/duplicate:
+    post:
+      tags: [Space Planning]
+      operationId: duplicateMySessionTemplate
+      x-allfit-operation: OP-PLN-036
+      x-allfit-cache: no-store
+      summary: Start a routine of my own from one I already have
+      description: >-
+        Copies one of the person's own routines into a new draft named after it with a
+        copy suffix, as `OP-PLN-035` does for programmes: what is edited is what is
+        copied, so the draft goes first and the latest version when there is none. The
+        original is left untouched.
+
+
+        **It is Pro** (`routine_duplication`), and the copy is one more of the person's
+        routines, so it also counts against `own_routines`. A plan that does not open
+        either answers `plan-limit-reached` naming the function.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '200':
+          description: The new routine and its draft, never the one it was copied from
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /space/v1/session-templates/{templateId}/versions:
     post:
       tags: [Space Planning]
@@ -7918,6 +7962,60 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
+
+  /space/v1/progress/periods:
+    get:
+      tags: [Space Execution]
+      operationId: compareMyPeriods
+      x-allfit-operation: OP-EXE-026
+      x-allfit-cache: no-store
+      summary: Compare my training week by week or month by month
+      description: >-
+        HU-SP-061. Each period says what was trained, the time, the work sets, the
+        volume and how much of the plan was kept; each movement says its best load
+        against the last earlier period it was trained in. Warm-up sets never count,
+        and a set nobody weighed is not zero lifted. Oldest period first.
+
+
+        **It is Pro** (`period_analysis`): a plan that does not open it answers
+        `plan-limit-reached`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: timezone
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/IanaTimeZone'
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [week, month]
+        - name: count
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 2
+            maximum: 12
+      responses:
+        '200':
+          description: The periods, oldest first, and each movement's best against the period before
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpacePeriodComparison'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /space/v1/executions/{executionId}:
     get:
@@ -10409,6 +10507,110 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /space/v1/body-photos:
+    get:
+      tags: [Space Identity]
+      operationId: listMyBodyPhotos
+      x-allfit-operation: OP-IDN-058
+      x-allfit-cache: no-store
+      summary: My body photos, newest first
+      description: >-
+        HU-SP-026. A body photo is the person's alone: no consent scope covers it, so no
+        gym or professional ever reads it. Each comes with a URL signed for five minutes;
+        the storage key never leaves the API. Reading one's own photos is never limited
+        by a plan.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The person's photos
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyPhotoPage'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Space Identity]
+      operationId: recordMyBodyPhoto
+      x-allfit-operation: OP-IDN-056
+      x-allfit-cache: no-store
+      summary: Keep a photo of my body
+      description: >-
+        HU-SP-025. The photo is sanitised (no EXIF, longest side 1600 px) and stored
+        privately under the person before the record is written; if the record fails the
+        object is removed. **It is Pro** (`body_photos`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BodyPhotoCreate'
+      responses:
+        '201':
+          description: The photo, kept
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Idempotent-Replay:
+              $ref: '#/components/headers/IdempotentReplay'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BodyPhoto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /space/v1/body-photos/{photoId}:
+    delete:
+      tags: [Space Identity]
+      operationId: deleteMyBodyPhoto
+      x-allfit-operation: OP-IDN-057
+      x-allfit-cache: no-store
+      summary: Delete a photo of my body
+      description: >-
+        HU-SP-027. The record goes in the same transaction that queues its object; the
+        API removes the object after the commit. Deleting one's own photos is never
+        limited by a plan.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Uuid'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CommandId'
+      responses:
+        '204':
+          description: The photo is gone
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /space/v1/health-context:
     get:
       tags: [Space Identity]
@@ -11669,6 +11871,14 @@ components:
                 type: https://errors.allfit.invalid/separation-of-duties
                 title: This actor already asked to read this person
                 status: 403
+                request_id: 01JEXAMPLE0000000000000000
+            planLimitReached:
+              summary: The person's plan does not open this function, or reached its limit
+              value:
+                type: https://errors.allfit.invalid/plan-limit-reached
+                title: The plan does not include this function
+                status: 403
+                feature: own_routines
                 request_id: 01JEXAMPLE0000000000000000
     AccountClosed:
       description: The person linked to the authenticated account is closed
@@ -14853,11 +15063,12 @@ components:
       description: The Fitness ID, the same one on every retry.
     BodyMetric:
       type: string
-      enum: [body_weight, body_height]
+      enum: [body_weight, body_height, muscle_mass, body_fat, waist, hip, chest, arm, thigh]
       description: >-
-        The two metrics V1 records. The `body_` prefix is not decoration: `metric_code`
+        The metrics a person records. The `body_` prefix is not decoration: `metric_code`
         also names execution results, where `weight` is the load on the bar rather than
-        the weight of the person.
+        the weight of the person. Weight and height are free; the rest are Pro
+        (`body_measurements`).
     MassUnit:
       type: string
       enum: [kg, lb]
@@ -14873,11 +15084,21 @@ components:
       oneOf:
         - $ref: '#/components/schemas/SpaceBodyWeightDeclaration'
         - $ref: '#/components/schemas/SpaceBodyHeightDeclaration'
+        - $ref: '#/components/schemas/SpaceBodyMassDeclaration'
+        - $ref: '#/components/schemas/SpaceBodyLengthDeclaration'
+        - $ref: '#/components/schemas/SpaceBodyFatDeclaration'
       discriminator:
         propertyName: metric_code
         mapping:
           body_weight: '#/components/schemas/SpaceBodyWeightDeclaration'
           body_height: '#/components/schemas/SpaceBodyHeightDeclaration'
+          muscle_mass: '#/components/schemas/SpaceBodyMassDeclaration'
+          waist: '#/components/schemas/SpaceBodyLengthDeclaration'
+          hip: '#/components/schemas/SpaceBodyLengthDeclaration'
+          chest: '#/components/schemas/SpaceBodyLengthDeclaration'
+          arm: '#/components/schemas/SpaceBodyLengthDeclaration'
+          thigh: '#/components/schemas/SpaceBodyLengthDeclaration'
+          body_fat: '#/components/schemas/SpaceBodyFatDeclaration'
       description: >-
         One variant per metric, so a weight cannot be sent in centimetres. The database
         refuses that too; refusing it in the contract means it cannot be expressed.
@@ -14911,6 +15132,59 @@ components:
           exclusiveMinimum: 0
         unit:
           $ref: '#/components/schemas/LengthUnit'
+        measured_on:
+          type: string
+          format: date
+    SpaceBodyMassDeclaration:
+      type: object
+      additionalProperties: false
+      required: [metric_code, value, unit, measured_on]
+      description: Pro (`body_measurements`).
+      properties:
+        metric_code:
+          type: string
+          const: muscle_mass
+        value:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          $ref: '#/components/schemas/MassUnit'
+        measured_on:
+          type: string
+          format: date
+    SpaceBodyLengthDeclaration:
+      type: object
+      additionalProperties: false
+      required: [metric_code, value, unit, measured_on]
+      description: Pro (`body_measurements`).
+      properties:
+        metric_code:
+          type: string
+          enum: [waist, hip, chest, arm, thigh]
+        value:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          $ref: '#/components/schemas/LengthUnit'
+        measured_on:
+          type: string
+          format: date
+    SpaceBodyFatDeclaration:
+      type: object
+      additionalProperties: false
+      required: [metric_code, value, unit, measured_on]
+      description: Pro (`body_measurements`).
+      properties:
+        metric_code:
+          type: string
+          const: body_fat
+        value:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 100
+        unit:
+          type: string
+          const: percent
         measured_on:
           type: string
           format: date
@@ -14967,12 +15241,22 @@ components:
       additionalProperties: false
       required:
         [program_version_id, program_id, title, weeks, days_per_week, sex_affinity, goals, levels,
-         emphases, cover_url]
+         emphases, cover_url, locked, unlock_feature]
       description: >-
         A published version of a global program, with the segmentation it was
         published with. The segmentation is part of the version and immutable with it:
         re-aiming a program means publishing another version.
       properties:
+        locked:
+          type: boolean
+          description: >-
+            True when the person's plan does not open this programme: it is shown, and
+            taking it answers `plan-limit-reached`.
+        unlock_feature:
+          type: [string, 'null']
+          description: >-
+            The function of the plan catalogue that opens this programme, or null when
+            it is in the free selection.
         program_version_id:
           $ref: '#/components/schemas/UuidV7'
         program_id:
@@ -15297,14 +15581,31 @@ components:
     SpaceHistoryPage:
       type: object
       additionalProperties: false
-      required: [data, page]
+      required: [data, window, page]
       properties:
+        window:
+          $ref: '#/components/schemas/SpaceHistoryWindow'
         data:
           type: array
           items:
             $ref: '#/components/schemas/SpaceHistoryItem'
         page:
           $ref: '#/components/schemas/Page'
+    SpaceHistoryWindow:
+      type: object
+      additionalProperties: false
+      required: [visible_from, has_hidden]
+      description: >-
+        Where the visible history starts under the person's plan, and whether older
+        sessions are kept behind it. Nothing outside the window is deleted: with Pro it
+        is seen again.
+      properties:
+        visible_from:
+          type: [string, 'null']
+          format: date
+          description: The first visible day; null when nothing is hidden.
+        has_hidden:
+          type: boolean
     SpaceHistoryWeek:
       type: object
       additionalProperties: false
@@ -15357,13 +15658,19 @@ components:
     SpaceHistoryMonth:
       type: object
       additionalProperties: false
-      required: [month, sessions, trained_seconds, work_sets, total_volume_kg, records, weeks,
+      required: [month, visible_from, sessions, trained_seconds, work_sets, total_volume_kg, records, weeks,
         days, months_available, disciplines]
       properties:
         month:
           type: string
           format: date
           description: The first day of the month.
+        visible_from:
+          type: [string, 'null']
+          format: date
+          description: >-
+            The first day the person's plan shows; sessions before it are kept and left
+            out. Null when nothing is hidden.
         sessions:
           type: integer
           minimum: 0
@@ -20546,9 +20853,10 @@ components:
     NutritionDailySummary:
       type: object
       additionalProperties: false
-      required: [local_date, meal_count, nutrient_totals, applied_scope]
+      required: [local_date, hidden, meal_count, nutrient_totals, applied_scope]
       example:
         local_date: '2026-07-28'
+        hidden: false
         meal_count: 3
         nutrient_totals:
           - nutrient_code: energy
@@ -20562,8 +20870,13 @@ components:
         local_date:
           type: string
           format: date
+        hidden:
+          type: boolean
+          description: >-
+            True for a day before the window the person's plan shows. Its meals are kept;
+            the day carries no count and no totals instead of reading as an empty day.
         meal_count:
-          type: integer
+          type: [integer, 'null']
           minimum: 0
         nutrient_totals:
           type: array
@@ -20578,8 +20891,12 @@ components:
     NutritionDailySummaryPage:
       type: object
       additionalProperties: false
-      required: [data, streak_days]
+      required: [data, streak_days, visible_from]
       properties:
+        visible_from:
+          type: [string, 'null']
+          format: date
+          description: The first day the person's plan shows; null when nothing is hidden.
         streak_days:
           type: integer
           minimum: 0
@@ -20945,6 +21262,131 @@ components:
           type: string
           const: GET
 
+    SpacePeriodComparison:
+      type: object
+      additionalProperties: false
+      required: [period, periods, movements]
+      properties:
+        period:
+          type: string
+          enum: [week, month]
+        periods:
+          type: array
+          minItems: 2
+          maxItems: 12
+          items:
+            $ref: '#/components/schemas/SpacePeriod'
+        movements:
+          type: array
+          description: Each movement's best in its latest period, best first.
+          items:
+            $ref: '#/components/schemas/SpacePeriodMovement'
+    SpacePeriod:
+      type: object
+      additionalProperties: false
+      required: [starts_on, sessions, active_days, trained_seconds, work_sets, volume_kg, planned,
+        fulfilled, muscles]
+      properties:
+        starts_on:
+          type: string
+          format: date
+        sessions:
+          type: integer
+          minimum: 0
+        active_days:
+          type: integer
+          minimum: 0
+        trained_seconds:
+          type: integer
+          minimum: 0
+        work_sets:
+          type: integer
+          minimum: 0
+        volume_kg:
+          type: [number, 'null']
+          minimum: 0
+        planned:
+          type: integer
+          minimum: 0
+        fulfilled:
+          type: integer
+          minimum: 0
+        muscles:
+          type: array
+          description: >-
+            How the period's work sets fall across the muscles, heaviest first. A set
+            belongs to one muscle, the movement's primary, as in a routine's own count.
+          items:
+            $ref: '#/components/schemas/SpacePeriodMuscle'
+    SpacePeriodMuscle:
+      type: object
+      additionalProperties: false
+      required: [code, name, sets]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        sets:
+          type: integer
+          minimum: 1
+    SpacePeriodMovement:
+      type: object
+      additionalProperties: false
+      required: [movement_id, name, best_kg, previous_best_kg, change_kg, bests]
+      properties:
+        movement_id:
+          $ref: '#/components/schemas/Uuid'
+        name:
+          type: string
+        best_kg:
+          type: number
+          minimum: 0
+        previous_best_kg:
+          type: [number, 'null']
+          minimum: 0
+        change_kg:
+          type: [number, 'null']
+        bests:
+          type: array
+          description: The movement's best in every period, oldest first; null where it was not trained.
+          items:
+            type: [number, 'null']
+            minimum: 0
+    BodyPhotoCreate:
+      type: object
+      additionalProperties: false
+      required: [taken_on, photo]
+      properties:
+        taken_on:
+          type: string
+          format: date
+        photo:
+          $ref: '#/components/schemas/NutritionPhotoUpload'
+    BodyPhoto:
+      type: object
+      additionalProperties: false
+      required: [id, taken_on, created_at, photo]
+      properties:
+        id:
+          $ref: '#/components/schemas/UuidV7'
+        taken_on:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+        photo:
+          $ref: '#/components/schemas/SignedMediaUrl'
+    BodyPhotoPage:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BodyPhoto'
     Problem:
       type: object
       additionalProperties: false
@@ -20980,6 +21422,12 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/ValidationIssue'
+        feature:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,63}$'
+          description: >-
+            Only on `plan-limit-reached`: the function of the plan catalogue that the
+            person's plan does not open or whose limit was reached (DT-018).
         current_state:
           description: Current server draft returned only for stale-draft conflicts.
           oneOf:
