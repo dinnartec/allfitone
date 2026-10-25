@@ -209,6 +209,11 @@ export function spaceExecutionRoutes(
     const count = Number(c.req.query('count'))
     if (!timezone || (period !== 'week' && period !== 'month')) return fail(c, 'invalid-request')
     if (!Number.isInteger(count) || count < 2 || count > 12) return fail(c, 'invalid-request')
+    // One programme, what was trained without one, or everything when absent.
+    const program = c.req.query('program')
+    if (program !== undefined && program !== 'free' && !UUID_V7.test(program)) {
+      return fail(c, 'invalid-request')
+    }
 
     try {
       const personId = await actors().personFor(token.subject)
@@ -217,6 +222,7 @@ export function spaceExecutionRoutes(
         timezone,
         period,
         count,
+        program: program ?? null,
         requestId: c.req.header('x-request-id') ?? '',
       })
       return c.json(comparison, 200)

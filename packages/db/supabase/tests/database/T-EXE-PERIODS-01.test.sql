@@ -8,7 +8,7 @@
 
 begin;
 
-select plan(8);
+select plan(13);
 
 insert into identity.people (id, given_name, family_name, username)
 values ('019efa00-0000-7000-8000-000000000001', 'Quien', 'Entrena', 'quien_ventana');
@@ -259,6 +259,45 @@ select is(
    from (select (date_trunc('week', clock_timestamp() at time zone 'America/Bogota')::date - (interval '1 week' * offs))::date as starts_on
          from generate_series(0, 3) as offs) as weeks),
   'T-EXE-PERIODS-08 each movement says its best in every period, null where it was not trained'
+);
+
+-- Progreso can be read for one programme: it says which programmes there are, and filters.
+select is(
+  (select array[program->>'title', (program->>'from_gym'), jsonb_array_length(program->'planned')::text]
+   from jsonb_array_elements(execution.compare_my_periods('019efa00-0000-7000-8000-000000000001', 'America/Bogota', 'week', 4)->'programs') as program),
+  array['Semana', 'false', '4'],
+  'T-EXE-PERIODS-10 the comparison names each programme with its planned sessions per period'
+);
+
+select is(
+  (select sum((period->>'sessions')::integer)::integer
+   from jsonb_array_elements(execution.compare_my_periods('019efa00-0000-7000-8000-000000000001', 'America/Bogota', 'week', 4, :'assignment')->'periods') as period),
+  2,
+  'T-EXE-PERIODS-11 one programme keeps the sessions that belong to it'
+);
+
+select is(
+  (select array[sum((period->>'sessions')::integer)::integer,
+                jsonb_array_length(execution.compare_my_periods('019efa00-0000-7000-8000-000000000001', 'America/Bogota', 'week', 4, 'free')->'movements')]
+   from jsonb_array_elements(execution.compare_my_periods('019efa00-0000-7000-8000-000000000001', 'America/Bogota', 'week', 4, 'free')->'periods') as period),
+  array[0, 0],
+  'T-EXE-PERIODS-12 free training is only what was trained without a programme'
+);
+
+select is(
+  (select (day->>'volume_kg')::numeric
+   from jsonb_array_elements(execution.compare_my_periods('019efa00-0000-7000-8000-000000000001', 'America/Bogota', 'week', 4)->'periods') as period,
+        jsonb_array_elements(period->'days') as day
+   where (day->>'trained_on')::date = ((clock_timestamp() - interval '1 day') at time zone 'America/Bogota')::date),
+  600.00,
+  'T-EXE-PERIODS-13 each period says its volume day by day'
+);
+
+select is(
+  (select sum((period->>'unplanned')::integer)::integer
+   from jsonb_array_elements(execution.compare_my_periods('019efa00-0000-7000-8000-000000000001', 'America/Bogota', 'week', 4, :'assignment')->'periods') as period),
+  0,
+  'T-EXE-PERIODS-14 each period says how many sessions had no plan, whatever is filtered'
 );
 
 select throws_ok(

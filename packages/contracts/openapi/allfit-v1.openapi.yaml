@@ -8000,6 +8000,17 @@ paths:
             type: integer
             minimum: 2
             maximum: 12
+        - name: program
+          in: query
+          required: false
+          description: >-
+            One programme (its assignment id) or `free` for what was trained without a
+            plan. Absent reads everything. `programs` lists every programme either way.
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/Uuid'
+              - type: string
+                const: free
       responses:
         '200':
           description: The periods, oldest first, and each movement's best against the period before
@@ -21265,11 +21276,16 @@ components:
     SpacePeriodComparison:
       type: object
       additionalProperties: false
-      required: [period, periods, movements]
+      required: [period, periods, movements, programs]
       properties:
         period:
           type: string
           enum: [week, month]
+        programs:
+          type: array
+          description: Every programme with sessions in the window, whatever was asked for.
+          items:
+            $ref: '#/components/schemas/SpacePeriodProgram'
         periods:
           type: array
           minItems: 2
@@ -21285,7 +21301,7 @@ components:
       type: object
       additionalProperties: false
       required: [starts_on, sessions, active_days, trained_seconds, work_sets, volume_kg, planned,
-        fulfilled, muscles]
+        fulfilled, unplanned, muscles, days]
       properties:
         starts_on:
           type: string
@@ -21318,6 +21334,49 @@ components:
             belongs to one muscle, the movement's primary, as in a routine's own count.
           items:
             $ref: '#/components/schemas/SpacePeriodMuscle'
+        unplanned:
+          type: integer
+          minimum: 0
+          description: Sessions trained with no plan behind them, whatever programme was asked for.
+        days:
+          type: array
+          description: The days trained in the period and their volume, oldest first.
+          items:
+            $ref: '#/components/schemas/SpacePeriodDay'
+    SpacePeriodProgram:
+      type: object
+      additionalProperties: false
+      required: [assignment_id, title, from_gym, planned, fulfilled]
+      properties:
+        assignment_id:
+          $ref: '#/components/schemas/Uuid'
+        title:
+          type: string
+        from_gym:
+          type: boolean
+        planned:
+          type: array
+          description: Planned sessions per period, oldest first.
+          items:
+            type: integer
+            minimum: 0
+        fulfilled:
+          type: array
+          description: Planned sessions kept per period, oldest first.
+          items:
+            type: integer
+            minimum: 0
+    SpacePeriodDay:
+      type: object
+      additionalProperties: false
+      required: [trained_on, volume_kg]
+      properties:
+        trained_on:
+          type: string
+          format: date
+        volume_kg:
+          type: [number, 'null']
+          minimum: 0
     SpacePeriodMuscle:
       type: object
       additionalProperties: false

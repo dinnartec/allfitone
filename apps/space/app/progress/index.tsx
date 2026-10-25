@@ -21,13 +21,21 @@ import { IconButton } from '@allfitone/react-native/icon-button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
+import { Sheet } from '@allfitone/react-native/sheet'
 import { SegmentedControl } from '@allfitone/react-native/segmented-control'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
 import { BlurView } from 'expo-blur'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
-import { ScrollView, Share, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
+import {
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native'
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -41,8 +49,8 @@ import { createSpaceContentFlow } from '../../src/client/content-transport'
 import { readExerciseLibrary } from '../../src/client/exercise-library'
 import { litSlugsFor } from '../../src/client/exercise-catalogue'
 import { INERT_SLUGS } from '../../src/client/focus-form'
-import type { HistoryMonth } from '../../src/client/history'
 import { opens } from '../../src/client/plan'
+import { selectionTick } from '../../src/client/selection-tick'
 import {
   cumulativeVolume,
   formatKilos,
@@ -53,6 +61,7 @@ import {
   periodLabel,
   periodStart,
   previousStart,
+  programOptions,
   shareLine,
   sparkline,
   untrained,
@@ -60,8 +69,9 @@ import {
   type PeriodComparison,
   type PeriodKind,
   type PeriodMovement,
+  type ProgramOption,
 } from '../../src/client/progress'
-import { comparePeriods, readHistoryMonth } from '../../src/client/progress-transport'
+import { comparePeriods } from '../../src/client/progress-transport'
 import { deviceTimezone } from '../../src/client/timezone'
 import { BodyFigure } from '../../src/components/body-figure'
 import { CardGlow, FIGURE_TRACKING, Ring } from '../../src/components/nutrition-ui'
@@ -82,17 +92,11 @@ function localToday(timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
 }
 
-/** The months a line needs: the one each compared period starts in, and today's. */
-function monthsFor(starts: readonly string[], today: string): string[] {
-  return [
-    ...new Set([...starts.map((start) => `${start.slice(0, 7)}-01`), `${today.slice(0, 7)}-01`]),
-  ]
-}
-
 type Muscles = Awaited<ReturnType<typeof readExerciseLibrary>>['muscles']
 
 export default function ProgressScreen() {
   const router = useRouter()
+  const theme = useTheme()
   const timezone = deviceTimezone()
   const today = localToday(timezone)
   const features = usePlan()
@@ -107,7 +111,9 @@ export default function ProgressScreen() {
   const [muscles, setMuscles] = useState<Muscles>([])
   /** How many periods back from the latest; 0 is this one. */
   const [offset, setOffset] = useState(0)
-  const [days, setDays] = useState<HistoryMonth['days']>([])
+  /** An assignment id, `free`, or null for everything (PROG-4a). */
+  const [program, setProgram] = useState<string | null>(null)
+  const [choosing, setChoosing] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
 
   useFocusEffect(
@@ -116,7 +122,7 @@ export default function ProgressScreen() {
       let active = true
       setFailure(undefined)
       Promise.all([
-        comparePeriods(kind, PERIODS, timezone),
+        comparePeriods(kind, PERIODS, timezone, program),
         readExerciseLibrary(createSpaceContentFlow()).catch(() => undefined),
       ])
         .then(([read, library]) => {
@@ -132,29 +138,18 @@ export default function ProgressScreen() {
       return () => {
         active = false
       }
-    }, [open, kind, timezone]),
+    }, [open, kind, timezone, program]),
   )
 
   const index = comparison ? comparison.periods.length - 1 - offset : -1
   const current = comparison?.periods[index]
   const previous = comparison?.periods[index - 1]
 
-  // The day by day volume of the two periods on screen.
-  useEffect(() => {
-    if (!current) return undefined
-    let active = true
-    const starts = previous ? [previous.starts_on, current.starts_on] : [current.starts_on]
-    Promise.all(monthsFor(starts, today).map((month) => readHistoryMonth(month, timezone)))
-      .then((months) => active && setDays(months.flatMap((month) => month.days)))
-      .catch(() => undefined)
-    return () => {
-      active = false
-    }
-  }, [current, previous, today, timezone])
-
   const start = current?.starts_on ?? periodStart(today, kind)
   const before = previous?.starts_on ?? previousStart(start, kind)
   const oldest = !comparison || index <= 1
+  const options = comparison ? programOptions(comparison.programs, comparison.periods, index) : []
+  const chosen = options.find((option) => option.key === program) ?? options[0]
 
   const share = () => {
     if (!open || !current) {
@@ -172,9 +167,39 @@ export default function ProgressScreen() {
           accessibilityLabel="Volver"
           onPress={() => (router.canGoBack() ? router.back() : router.replace('/profile'))}
         />
-        <Text role="control" size="xl" accessibilityRole="header" style={styles.title}>
-          Progreso
-        </Text>
+        <View style={styles.titles}>
+          <Text role="control" size="xl" accessibilityRole="header" align="center">
+            Progreso
+          </Text>
+          {/* What is being read, under the title, as Apple's Health and Fitness do. */}
+          {chosen ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Ver el progreso de: ${chosen.label}. Cambiar`}
+              hitSlop={10}
+              testID="progress-program"
+              onPress={() => setChoosing(true)}
+              style={styles.program}
+            >
+              <View
+                style={[
+                  styles.programDot,
+                  {
+                    backgroundColor: programColor(
+                      theme,
+                      chosen.key,
+                      options.findIndex((option) => option.key === chosen.key),
+                    ),
+                  },
+                ]}
+              />
+              <Text role="control" size="xs" color="accent" numberOfLines={1}>
+                {chosen.label}
+              </Text>
+              <FoundationIcon name="expand" size="xs" color={theme.color.icon.accent} decorative />
+            </Pressable>
+          ) : null}
+        </View>
         <IconButton icon="share" accessibilityLabel="Compartir tu progreso" onPress={share} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
@@ -224,7 +249,6 @@ export default function ProgressScreen() {
             current={current}
             previous={previous}
             movements={movementsAt(comparison.movements, index)}
-            days={days}
             muscles={muscles}
             kind={kind}
             today={today}
@@ -233,8 +257,99 @@ export default function ProgressScreen() {
           <ProVeil kind={kind} today={today} onUpgrade={() => router.push('/pro/plans')} />
         ) : null}
       </ScrollView>
+      <Sheet visible={choosing} onDismiss={() => setChoosing(false)} title="Ver el progreso de">
+        <View style={styles.options}>
+          {options.map((option, position) => (
+            <ProgramChoice
+              key={option.key ?? 'all'}
+              option={option}
+              color={programColor(theme, option.key, position)}
+              selected={option.key === (chosen?.key ?? null)}
+              onPress={() => {
+                selectionTick()
+                setProgram(option.key)
+                setChoosing(false)
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
       {upgrade.sheet}
     </Screen>
+  )
+}
+
+/** Each programme keeps a colour of its own: the same dot under the title and in the sheet. */
+function programColor(
+  theme: ReturnType<typeof useTheme>,
+  key: string | null,
+  position: number,
+): string {
+  if (key === null) return theme.color.icon.accent
+  if (key === 'free') return theme.color.icon.secondary
+  const palette = [
+    theme.color.icon.accent,
+    theme.color.discipline.highIntensity,
+    theme.color.discipline.rhythm,
+    theme.color.discipline.wellbeing,
+  ]
+  return palette[(position - 1) % palette.length] ?? theme.color.icon.accent
+}
+
+/** One choice of the sheet, as `PROG-4` draws it: a card, its dot, done of planned. */
+function ProgramChoice({
+  option,
+  color,
+  selected,
+  onPress,
+}: {
+  readonly option: ProgramOption
+  readonly color: string
+  readonly selected: boolean
+  readonly onPress: () => void
+}) {
+  const theme = useTheme()
+  const figure =
+    option.planned === null
+      ? String(option.done)
+      : `${String(option.done)} de ${String(option.planned)}`
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${option.label}. ${option.caption}. ${figure}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.choice,
+        selected
+          ? { backgroundColor: theme.color.accent.tonal, borderColor: theme.color.border.accent }
+          : {
+              backgroundColor: theme.color.background.surface,
+              borderColor: theme.color.border.subtle,
+            },
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      {option.key === null ? (
+        <FoundationIcon name="overview" size="sm" color={theme.color.icon.accent} decorative />
+      ) : (
+        <View style={[styles.choiceDot, { backgroundColor: color }]} />
+      )}
+      <View style={styles.grow}>
+        <Text role="control" size="sm" color={selected ? 'accent' : 'primary'}>
+          {option.label}
+        </Text>
+        <Text role="body" size="xs" color="secondary">
+          {option.caption}
+        </Text>
+      </View>
+      <Text role="poster" tracking={FIGURE_TRACKING} size="lg" color="secondary">
+        {figure}
+      </Text>
+      {selected ? (
+        <FoundationIcon name="check" size="sm" color={theme.color.icon.accent} decorative />
+      ) : null}
+    </Pressable>
   )
 }
 
@@ -242,7 +357,6 @@ function Comparison({
   current,
   previous,
   movements,
-  days,
   muscles,
   kind,
   today,
@@ -250,7 +364,6 @@ function Comparison({
   readonly current: Period
   readonly previous: Period | undefined
   readonly movements: readonly PeriodMovement[]
-  readonly days: HistoryMonth['days']
   readonly muscles: Muscles
   readonly kind: PeriodKind
   readonly today: string
@@ -265,7 +378,13 @@ function Comparison({
 
   return (
     <View style={styles.sections}>
-      <VolumeCard kind={kind} today={today} days={days} current={current} previous={previous} />
+      <VolumeCard
+        kind={kind}
+        today={today}
+        days={[...(previous?.days ?? []), ...current.days]}
+        current={current}
+        previous={previous}
+      />
       <View style={styles.tiles}>
         <Tile
           value={String(current.sessions)}
@@ -331,7 +450,7 @@ function VolumeCard({
 }: {
   readonly kind: PeriodKind
   readonly today: string
-  readonly days: HistoryMonth['days']
+  readonly days: Period['days']
   readonly current: NonNullable<PeriodComparison['periods'][number]>
   readonly previous: PeriodComparison['periods'][number] | undefined
 }) {
@@ -722,7 +841,12 @@ function ProVeil({
 }) {
   const theme = useTheme()
   const start = periodStart(today, kind)
-  const sample = (startsOn: string, volume: number, sessions: number): Period => ({
+  const sample = (
+    startsOn: string,
+    volume: number,
+    sessions: number,
+    days: Period['days'],
+  ): Period => ({
     starts_on: startsOn,
     sessions,
     active_days: sessions,
@@ -731,6 +855,8 @@ function ProVeil({
     volume_kg: volume,
     planned: 4,
     fulfilled: sessions,
+    unplanned: 0,
+    days,
     muscles: [
       { code: 'chest', name: 'Pecho', sets: 12 },
       { code: 'lats', name: 'Dorsal', sets: 10 },
@@ -738,16 +864,17 @@ function ProVeil({
       { code: 'shoulders', name: 'Hombros', sets: 6 },
     ],
   })
-  const before = sample(previousStart(start, kind), 10600, 3)
-  const now = sample(start, 12480, 4)
-  const days = [0, 2, 4].map((offset, index) => ({
-    trained_on: addDays(start, offset),
-    sessions: 1,
-    trained_seconds: 3300,
-    work_sets: 10,
-    volume_kg: [3600, 4500, 4380][index] ?? 0,
-    records: 0,
-  }))
+  const earlier = previousStart(start, kind)
+  const before = sample(earlier, 10600, 3, [
+    { trained_on: addDays(earlier, 0), volume_kg: 3200 },
+    { trained_on: addDays(earlier, 2), volume_kg: 3700 },
+    { trained_on: addDays(earlier, 4), volume_kg: 3700 },
+  ])
+  const now = sample(start, 12480, 4, [
+    { trained_on: addDays(start, 0), volume_kg: 3600 },
+    { trained_on: addDays(start, 2), volume_kg: 4500 },
+    { trained_on: addDays(start, 4), volume_kg: 4380 },
+  ])
   return (
     <View style={styles.veilWrap}>
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -768,7 +895,6 @@ function ProVeil({
             change_kg: to - from,
             bests: [from - 5, from, from, to],
           }))}
-          days={days}
           muscles={[]}
           kind={kind}
           today={addDays(start, 6)}
@@ -835,7 +961,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  title: { flex: 1, textAlign: 'center' },
+  titles: { flex: 1, alignItems: 'center', gap: 2 },
+  program: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 220 },
+  programDot: { width: 7, height: 7, borderRadius: 4 },
+  options: { gap: 10 },
+  choice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 62,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+  },
+  choiceDot: { width: 9, height: 9, borderRadius: 5, marginHorizontal: 4 },
+  pressed: { opacity: 0.8 },
   content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 48, gap: 16 },
   sections: { gap: 16 },
   period: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

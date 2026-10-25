@@ -8914,6 +8914,8 @@ export interface components {
     SpacePeriodComparison: {
       /** @enum {string} */
       period: 'week' | 'month'
+      /** @description Every programme with sessions in the window, whatever was asked for. */
+      programs: components['schemas']['SpacePeriodProgram'][]
       periods: components['schemas']['SpacePeriod'][]
       /** @description Each movement's best in its latest period, best first. */
       movements: components['schemas']['SpacePeriodMovement'][]
@@ -8930,6 +8932,24 @@ export interface components {
       fulfilled: number
       /** @description How the period's work sets fall across the muscles, heaviest first. A set belongs to one muscle, the movement's primary, as in a routine's own count. */
       muscles: components['schemas']['SpacePeriodMuscle'][]
+      /** @description Sessions trained with no plan behind them, whatever programme was asked for. */
+      unplanned: number
+      /** @description The days trained in the period and their volume, oldest first. */
+      days: components['schemas']['SpacePeriodDay'][]
+    }
+    SpacePeriodProgram: {
+      assignment_id: components['schemas']['Uuid']
+      title: string
+      from_gym: boolean
+      /** @description Planned sessions per period, oldest first. */
+      planned: number[]
+      /** @description Planned sessions kept per period, oldest first. */
+      fulfilled: number[]
+    }
+    SpacePeriodDay: {
+      /** Format: date */
+      trained_on: string
+      volume_kg: number | null
     }
     SpacePeriodMuscle: {
       code: string
@@ -16105,6 +16125,8 @@ export interface operations {
         timezone: components['schemas']['IanaTimeZone']
         period: 'week' | 'month'
         count: number
+        /** @description One programme (its assignment id) or `free` for what was trained without a plan. Absent reads everything. `programs` lists every programme either way. */
+        program?: components['schemas']['Uuid'] | 'free'
       }
       header?: never
       path?: never

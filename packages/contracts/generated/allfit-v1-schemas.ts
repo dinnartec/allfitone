@@ -11997,7 +11997,9 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       'volume_kg',
       'planned',
       'fulfilled',
+      'unplanned',
       'muscles',
+      'days',
     ],
     properties: {
       starts_on: {
@@ -12040,16 +12042,35 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
           $ref: '#/components/schemas/SpacePeriodMuscle',
         },
       },
+      unplanned: {
+        type: 'integer',
+        minimum: 0,
+        description: 'Sessions trained with no plan behind them, whatever programme was asked for.',
+      },
+      days: {
+        type: 'array',
+        description: 'The days trained in the period and their volume, oldest first.',
+        items: {
+          $ref: '#/components/schemas/SpacePeriodDay',
+        },
+      },
     },
   },
   SpacePeriodComparison: {
     type: 'object',
     additionalProperties: false,
-    required: ['period', 'periods', 'movements'],
+    required: ['period', 'periods', 'movements', 'programs'],
     properties: {
       period: {
         type: 'string',
         enum: ['week', 'month'],
+      },
+      programs: {
+        type: 'array',
+        description: 'Every programme with sessions in the window, whatever was asked for.',
+        items: {
+          $ref: '#/components/schemas/SpacePeriodProgram',
+        },
       },
       periods: {
         type: 'array',
@@ -12065,6 +12086,21 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
         items: {
           $ref: '#/components/schemas/SpacePeriodMovement',
         },
+      },
+    },
+  },
+  SpacePeriodDay: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['trained_on', 'volume_kg'],
+    properties: {
+      trained_on: {
+        type: 'string',
+        format: 'date',
+      },
+      volume_kg: {
+        type: ['number', 'null'],
+        minimum: 0,
       },
     },
   },
@@ -12115,6 +12151,38 @@ export const allfitV1ContractSchemas: Record<string, unknown> = {
       sets: {
         type: 'integer',
         minimum: 1,
+      },
+    },
+  },
+  SpacePeriodProgram: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['assignment_id', 'title', 'from_gym', 'planned', 'fulfilled'],
+    properties: {
+      assignment_id: {
+        $ref: '#/components/schemas/Uuid',
+      },
+      title: {
+        type: 'string',
+      },
+      from_gym: {
+        type: 'boolean',
+      },
+      planned: {
+        type: 'array',
+        description: 'Planned sessions per period, oldest first.',
+        items: {
+          type: 'integer',
+          minimum: 0,
+        },
+      },
+      fulfilled: {
+        type: 'array',
+        description: 'Planned sessions kept per period, oldest first.',
+        items: {
+          type: 'integer',
+          minimum: 0,
+        },
       },
     },
   },

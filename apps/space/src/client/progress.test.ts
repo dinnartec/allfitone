@@ -10,6 +10,7 @@ import {
   periodLabel,
   periodStart,
   previousStart,
+  programOptions,
   shareLine,
   sparkline,
   untrained,
@@ -26,7 +27,9 @@ const period = (starts_on: string, overrides: Partial<Period> = {}): Period => (
   volume_kg: null,
   planned: 0,
   fulfilled: 0,
+  unplanned: 0,
   muscles: [],
+  days: [],
   ...overrides,
 })
 
@@ -181,5 +184,45 @@ describe('the period before', () => {
     expect(previousStart('2026-10-19', 'week')).toBe('2026-10-12')
     expect(previousStart('2026-10-01', 'month')).toBe('2026-09-01')
     expect(previousStart('2026-01-01', 'month')).toBe('2025-12-01')
+  })
+})
+
+describe('choosing a programme', () => {
+  const program = (
+    assignment_id: string,
+    title: string,
+    planned: number[],
+    fulfilled: number[],
+  ) => ({
+    assignment_id,
+    title,
+    from_gym: false,
+    planned,
+    fulfilled,
+  })
+  const programs = [
+    program('a', 'Torso y pierna', [4, 4], [3, 1]),
+    program('b', 'Fuerza básica', [3, 3], [2, 0]),
+  ]
+
+  test('T-SPC-UNIT-PROG-15 offers everything, each programme and free training, done of planned', () => {
+    expect(programOptions(programs, [period('w1'), period('w2', { unplanned: 2 })], 1)).toEqual([
+      {
+        key: null,
+        label: 'Todos los programas',
+        caption: '2 programas y entrenos libres',
+        done: 1,
+        planned: 7,
+      },
+      { key: 'a', label: 'Torso y pierna', caption: 'Programa propio', done: 1, planned: 4 },
+      { key: 'b', label: 'Fuerza básica', caption: 'Programa propio', done: 0, planned: 3 },
+      { key: 'free', label: 'Libres', caption: 'Sin programa', done: 2, planned: null },
+    ])
+  })
+
+  test('T-SPC-UNIT-PROG-16 with one programme and nothing free there is nothing to choose', () => {
+    expect(
+      programOptions([programs[0] ?? program('x', 'x', [], [])], [period('w1'), period('w2')], 1),
+    ).toEqual([])
   })
 })

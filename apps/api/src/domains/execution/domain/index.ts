@@ -173,6 +173,8 @@ export interface ExecutionDatabase {
     timezone: string
     period: PeriodComparison['period']
     count: number
+    /** An assignment id, `free`, or null for everything. */
+    program: string | null
     requestId: string
   }): Promise<PeriodComparison>
 }

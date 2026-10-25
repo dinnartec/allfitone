@@ -16,6 +16,7 @@ export type PeriodComparison = AllfitV1Schemas['SpacePeriodComparison']
 export type Period = AllfitV1Schemas['SpacePeriod']
 export type PeriodMovement = AllfitV1Schemas['SpacePeriodMovement']
 export type PeriodKind = PeriodComparison['period']
+export type PeriodProgram = AllfitV1Schemas['SpacePeriodProgram']
 
 const MONTHS = [
   'Enero',
@@ -195,4 +196,49 @@ export function movementsAt(movements: readonly PeriodMovement[], index: number)
 /** The start of the period before the one starting on `start`. */
 export function previousStart(start: string, kind: PeriodKind): string {
   return periodStart(isoOf(new Date(dayOf(start).getTime() - DAY)), kind)
+}
+
+export interface ProgramOption {
+  /** An assignment id, `free`, or null for everything. */
+  readonly key: string | null
+  readonly label: string
+  readonly caption: string
+  readonly done: number
+  /** Null for free training, which has nothing planned to be measured against. */
+  readonly planned: number | null
+}
+
+/**
+ * What «Progreso» can be read for at the period `index`: everything, each programme and
+ * free training, each with what was done of what was planned. Empty when there is only
+ * one thing to read, because then the screen offers no choice.
+ */
+export function programOptions(
+  programs: readonly PeriodProgram[],
+  periods: readonly Period[],
+  index: number,
+): ProgramOption[] {
+  const free = periods[index]?.unplanned ?? 0
+  if (programs.length + (free > 0 ? 1 : 0) < 2) return []
+  const each = programs.map((program) => ({
+    key: program.assignment_id,
+    label: program.title,
+    caption: program.from_gym ? 'De tu gimnasio' : 'Programa propio',
+    done: program.fulfilled[index] ?? 0,
+    planned: program.planned[index] ?? 0,
+  }))
+  const count = `${String(programs.length)} ${programs.length === 1 ? 'programa' : 'programas'}`
+  return [
+    {
+      key: null,
+      label: 'Todos los programas',
+      caption: free > 0 ? `${count} y entrenos libres` : count,
+      done: each.reduce((sum, option) => sum + option.done, 0),
+      planned: each.reduce((sum, option) => sum + option.planned, 0),
+    },
+    ...each,
+    ...(free > 0
+      ? [{ key: 'free', label: 'Libres', caption: 'Sin programa', done: free, planned: null }]
+      : []),
+  ]
 }

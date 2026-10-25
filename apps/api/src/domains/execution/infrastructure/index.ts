@@ -325,7 +325,8 @@ export function createExecutionDatabase(): ExecutionDatabase {
       transact(sql, input.personId, input.requestId, async (transaction) => {
         const [row] = await transaction<{ comparison: PeriodComparison }[]>`
           select execution.compare_my_periods(
-            ${input.personId}::uuid, ${input.timezone}, ${input.period}, ${input.count}::integer
+            ${input.personId}::uuid, ${input.timezone}, ${input.period}, ${input.count}::integer,
+            ${input.program}
           ) as comparison
         `
         if (!row) throw new Error('PostgreSQL did not compare the periods')

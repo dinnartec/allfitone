@@ -266,6 +266,8 @@ const comparison: PeriodComparison = {
       planned: 3,
       fulfilled: 2,
       muscles: [{ code: 'chest', name: 'Pecho', sets: 12 }],
+      unplanned: 0,
+      days: [{ trained_on: '2026-10-13', volume_kg: 4100 }],
     },
     {
       starts_on: '2026-10-19',
@@ -277,6 +279,17 @@ const comparison: PeriodComparison = {
       planned: 3,
       fulfilled: 3,
       muscles: [{ code: 'chest', name: 'Pecho', sets: 15 }],
+      unplanned: 1,
+      days: [{ trained_on: '2026-10-20', volume_kg: 4800 }],
+    },
+  ],
+  programs: [
+    {
+      assignment_id: '019ef600-0000-7000-8000-0000000000c1',
+      title: 'Semana',
+      from_gym: false,
+      planned: [3, 3],
+      fulfilled: [2, 3],
     },
   ],
   movements: [
@@ -892,6 +905,24 @@ describe('GET /space/v1/progress/periods', () => {
     expect(asked).toEqual({ timezone: 'America/Bogota', period: 'week', count: 8 })
   })
 
+  test('T-EXE-API-33 reads one programme, or what was trained without one', async () => {
+    const asked: unknown[] = []
+    const watching = harness({
+      comparePeriods: async (input) => {
+        asked.push(input.program)
+        return comparison
+      },
+    })
+    for (const program of ['019ef600-0000-7000-8000-0000000000c1', 'free']) {
+      const response = await watching.request(
+        `/space/v1/progress/periods?timezone=America/Bogota&period=week&count=6&program=${program}`,
+        { headers: authorized },
+      )
+      expect(response.status).toBe(200)
+    }
+    expect(asked).toEqual(['019ef600-0000-7000-8000-0000000000c1', 'free'])
+  })
+
   test('T-EXE-API-31 a plan without the comparison says which function it lacks', async () => {
     const refused = harness({
       comparePeriods: async () => {
@@ -917,6 +948,7 @@ describe('GET /space/v1/progress/periods', () => {
       'timezone=America/Bogota&period=week&count=13',
       'timezone=America/Bogota&period=week&count=two',
       'period=week&count=4',
+      'timezone=America/Bogota&period=week&count=4&program=mine',
     ]) {
       const response = await harness().request(`/space/v1/progress/periods?${query}`, {
         headers: authorized,

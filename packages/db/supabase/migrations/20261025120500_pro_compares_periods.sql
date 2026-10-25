@@ -5,9 +5,14 @@
 -- for each movement, its best load against the previous period it was trained in. It
 -- needs `period_analysis`. Warm-up sets never count and nothing weighed is not zero.
 --
--- Each period also says how its work sets fall across the muscles, and each movement
--- its best in every period, which is what the progress screen draws. A set belongs to
--- one muscle, the movement's primary: the rule a routine's own count already follows.
+-- Each period also says how its work sets fall across the muscles, its volume day by
+-- day, and each movement its best in every period, which is what the progress screen
+-- draws. A set belongs to one muscle, the movement's primary: the rule a routine's own
+-- count already follows.
+--
+-- `p_program` reads one programme (an assignment id) or `free` (sessions with no plan
+-- behind them); null reads everything. Whatever is chosen, `programs` lists every
+-- programme with sessions in the window, so the screen can offer the choice.
 --
 -- Recognising a meal by photo runs outside the database, in the API. Before it sends
 -- anything to the model it asks here, so the limit lives with the others:
@@ -17,7 +22,7 @@ set lock_timeout = '5s';
 set statement_timeout = '60s';
 
 create function execution.compare_my_periods(
-  p_person_id uuid, p_timezone text, p_period text, p_count integer
+  p_person_id uuid, p_timezone text, p_period text, p_count integer, p_program text default null
 )
 returns jsonb
 language plpgsql
@@ -30,6 +35,7 @@ declare
   current_start date;
   first_start date;
   result jsonb;
+  chosen uuid;
 begin
   if access_control.actor_kind() <> 'person' or access_control.person() <> p_person_id then
     raise exception 'periods are read only by their own person' using errcode = '42501';
@@ -38,6 +44,9 @@ begin
     raise exception 'periods are 2 to 12 weeks or months' using errcode = '22023';
   end if;
   perform payments.require_feature(p_person_id, 'period_analysis');
+  if p_program is not null and p_program <> 'free' then
+    chosen := p_program::uuid;
+  end if;
 
   step := case p_period when 'week' then interval '1 week' else interval '1 month' end;
   current_start := date_trunc(p_period, clock_timestamp() at time zone p_timezone)::date;
@@ -63,6 +72,28 @@ begin
       and executed.annulled_at is null
       and executed.ended_at is not null
       and (executed.started_at at time zone p_timezone)::date >= first_start
+      and (
+        p_program is null
+        or (p_program = 'free' and attempt.planned_session_id is null)
+        or exists (
+          select 1 from planning.planned_sessions as owner
+          where owner.id = attempt.planned_session_id and owner.assignment_id = chosen
+        )
+      )
+  ),
+  -- Sessions with no plan behind them, never filtered: the choice «Libres» depends on it.
+  unplanned as (
+    select (executed.started_at at time zone p_timezone)::date as trained_on
+    from execution.executed_sessions as executed
+    where executed.person_id = p_person_id
+      and executed.execution_status = 'completed'
+      and executed.annulled_at is null
+      and executed.ended_at is not null
+      and (executed.started_at at time zone p_timezone)::date >= first_start
+      and not exists (
+        select 1 from execution.planned_session_executions as attempt
+        where attempt.executed_session_id = executed.id
+      )
   ),
   work as (
     select finished.id, finished.trained_on, sets.movement_id,
@@ -80,6 +111,20 @@ begin
     where muscle.status = 'published'
       and link.movement_id in (select work.movement_id from work)
     order by link.movement_id, link.is_primary desc, muscle.display_order
+  ),
+  -- Every programme with sessions in the window, planned and kept per period.
+  programmes as (
+    select assignment.id, assignment.display_order, version.title,
+           assignment.origin_relationship_id is not null as from_gym
+    from planning.program_assignments as assignment
+    join planning.program_versions as version on version.id = assignment.program_version_id
+    where assignment.person_id = p_person_id
+      and exists (
+        select 1 from planning.planned_sessions as session
+        where session.assignment_id = assignment.id
+          and session.status not in ('cancelled', 'paused')
+          and (session.scheduled_at at time zone p_timezone)::date >= first_start
+      )
   ),
   muscles as (
     select bounded.index, loading.code, loading.name, count(*)::integer as sets
@@ -103,6 +148,8 @@ begin
             where work.trained_on >= bounded.starts_on and work.trained_on < bounded.ends_before) as volume_kg,
            (select count(*)::integer from planning.planned_sessions as session
             where session.person_id = p_person_id
+              and p_program is distinct from 'free'
+              and (chosen is null or session.assignment_id = chosen)
               and session.status not in ('cancelled', 'paused')
               and (session.scheduled_at at time zone p_timezone)::date >= bounded.starts_on
               and (session.scheduled_at at time zone p_timezone)::date < bounded.ends_before) as planned,
@@ -139,11 +186,51 @@ begin
         'volume_kg', per_period.volume_kg,
         'planned', per_period.planned,
         'fulfilled', per_period.fulfilled,
+        'unplanned', (select count(*)::integer from unplanned
+          where unplanned.trained_on >= per_period.starts_on
+            and unplanned.trained_on < (select bounded.ends_before from bounded
+                                        where bounded.index = per_period.index)),
+        'days', coalesce((select jsonb_agg(jsonb_build_object(
+            'trained_on', daily.trained_on, 'volume_kg', daily.volume_kg) order by daily.trained_on)
+          from (
+            select finished.trained_on,
+                   (select round(sum(work.load_kg * work.achieved_reps), 2) from work
+                    where work.id in (select same.id from finished as same
+                                      where same.trained_on = finished.trained_on)) as volume_kg
+            from finished
+            where finished.trained_on >= per_period.starts_on
+              and finished.trained_on < (select bounded.ends_before from bounded
+                                         where bounded.index = per_period.index)
+            group by finished.trained_on
+          ) as daily), '[]'::jsonb),
         'muscles', coalesce((select jsonb_agg(jsonb_build_object(
             'code', muscles.code, 'name', muscles.name, 'sets', muscles.sets)
             order by muscles.sets desc, muscles.name)
           from muscles where muscles.index = per_period.index), '[]'::jsonb))
         order by per_period.index) from per_period),
+    'programs', coalesce((select jsonb_agg(jsonb_build_object(
+        'assignment_id', programmes.id,
+        'title', programmes.title,
+        'from_gym', programmes.from_gym,
+        'planned', (select jsonb_agg((
+            select count(*) from planning.planned_sessions as session
+            where session.assignment_id = programmes.id
+              and session.status not in ('cancelled', 'paused')
+              and (session.scheduled_at at time zone p_timezone)::date >= bounded.starts_on
+              and (session.scheduled_at at time zone p_timezone)::date < bounded.ends_before)
+            order by bounded.index) from bounded),
+        'fulfilled', (select jsonb_agg((
+            select count(distinct attempt.planned_session_id)
+            from execution.planned_session_executions as attempt
+            join execution.executed_sessions as executed on executed.id = attempt.executed_session_id
+            join planning.planned_sessions as session on session.id = attempt.planned_session_id
+            where session.assignment_id = programmes.id
+              and executed.execution_status = 'completed'
+              and executed.annulled_at is null
+              and (session.scheduled_at at time zone p_timezone)::date >= bounded.starts_on
+              and (session.scheduled_at at time zone p_timezone)::date < bounded.ends_before)
+            order by bounded.index) from bounded))
+        order by programmes.display_order, programmes.title) from programmes), '[]'::jsonb),
     'movements', coalesce((select jsonb_agg(jsonb_build_object(
         'movement_id', compared.movement_id,
         'name', movement.name,
@@ -179,9 +266,9 @@ begin
 end
 $function$;
 
-alter function execution.compare_my_periods(uuid, text, text, integer) owner to allfit_owner;
+alter function execution.compare_my_periods(uuid, text, text, integer, text) owner to allfit_owner;
 alter function nutrition.require_recognition(uuid) owner to allfit_owner;
-revoke all on function execution.compare_my_periods(uuid, text, text, integer) from public;
+revoke all on function execution.compare_my_periods(uuid, text, text, integer, text) from public;
 revoke all on function nutrition.require_recognition(uuid) from public;
-grant execute on function execution.compare_my_periods(uuid, text, text, integer) to allfit_api;
+grant execute on function execution.compare_my_periods(uuid, text, text, integer, text) to allfit_api;
 grant execute on function nutrition.require_recognition(uuid) to allfit_api;
