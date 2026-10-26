@@ -15,7 +15,21 @@ import type { AllfitV1Schemas } from '@allfitone/contracts'
 export type ShareSummary = AllfitV1Schemas['SpaceExecutionSummary']
 export type ShareRecord = ShareSummary['records'][number]
 
-export type CardKind = 'photo' | 'record' | 'streak' | 'session' | 'muscles' | 'number' | 'plain'
+export type CardKind =
+  | 'photo'
+  | 'record'
+  | 'streak'
+  | 'session'
+  | 'muscles'
+  | 'number'
+  | 'plain'
+  | 'total'
+  | 'time'
+  | 'records'
+  | 'sets'
+
+/** The transparent stickers of FIN-SH2, to go over a photograph of the person's own. */
+export type StickerKind = 'figures' | 'record' | 'streak' | 'strip' | 'muscles' | 'number'
 
 /** Below this, a run of weeks is not yet a streak worth a card of its own. */
 const SHORTEST_STREAK = 2
@@ -37,7 +51,46 @@ export function cardsFor(summary: ShareSummary): readonly CardKind[] {
     'muscles',
     'number',
     'plain',
+    // The minimal ones of FIN-SH: one idea each, after the full cards.
+    ...(summary.total_volume_kg !== null ? (['total'] as const) : []),
+    'time',
+    ...(summary.records.length > 0 ? (['records'] as const) : []),
+    'sets',
   ]
+}
+
+export function stickersFor(summary: ShareSummary): readonly StickerKind[] {
+  return [
+    'figures',
+    ...(summary.records.length > 0 ? (['record'] as const) : []),
+    ...(summary.streak_weeks >= SHORTEST_STREAK ? (['streak'] as const) : []),
+    'strip',
+    'muscles',
+    'number',
+  ]
+}
+
+const MEANING: Readonly<Record<ShareRecord['kind'], string>> = {
+  heaviest: 'MÁS PESO QUE NUNCA',
+  e1rm: 'TU MEJOR 1RM ESTIMADO',
+  best_set: 'TU MEJOR SERIE',
+  session_volume: 'TU SESIÓN MÁS PESADA',
+}
+
+/** «+2,5 KG», and what beating it means. */
+export function recordGain(record: ShareRecord): {
+  readonly gain: string
+  readonly meaning: string
+} {
+  const gain = Math.round((record.value - record.previous_value) * 10) / 10
+  return { gain: `+${kilos(gain)} KG`, meaning: MEANING[record.kind] }
+}
+
+/** «EN 26 MINUTOS», or «EN 1 H 05» past an hour. */
+export function minutesLine(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  if (minutes < 60) return `EN ${String(minutes)} ${minutes === 1 ? 'MINUTO' : 'MINUTOS'}`
+  return `EN ${String(Math.floor(minutes / 60))} H ${String(minutes % 60).padStart(2, '0')}`
 }
 
 /** «Tirón · sesión 14 · 2 récords», with only the parts there are. */

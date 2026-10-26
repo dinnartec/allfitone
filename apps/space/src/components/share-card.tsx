@@ -42,6 +42,8 @@ import {
   exercisesLabel,
   groupsTitle,
   headline,
+  minutesLine,
+  recordGain,
   recordFigure,
   daysSince,
   recordJump,
@@ -118,6 +120,14 @@ function cardFor(props: ShareCardProps) {
       return <MusclesCard {...props} />
     case 'number':
       return <NumberCard {...props} />
+    case 'total':
+      return <TotalCard {...props} />
+    case 'time':
+      return <TimeCard {...props} />
+    case 'records':
+      return <RecordsCard {...props} />
+    case 'sets':
+      return <SetsCard {...props} />
   }
 }
 
@@ -1113,11 +1123,199 @@ function NumberCard({ summary, catalogue, timeZone }: ShareCardProps) {
   )
 }
 
+// ———————————————————————————————————————————— FN1 · FN2 · FN3 · FN4 · the minimal ones
+
+/** «TIRÓN · MAR 20 · SESIÓN 10», centred at the top: the minimal cards keep only this. */
+function MinimalFrame({
+  summary,
+  catalogue,
+  timeZone,
+  children,
+}: ShareCardProps & { readonly children: ReactNode }) {
+  return (
+    <Frame>
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.at,
+          styles.wide,
+          { top: 40 },
+          type(BODY_HEAVY, 9.5, INK.accent, { tracking: 1.6 }),
+        ]}
+      >
+        {`${routineTitle(summary, catalogue)} · ${whenLine(summary, timeZone)}`}
+      </Text>
+      {children}
+      <View style={[styles.at, { left: 98, top: 491 }]}>
+        <ProductLockup product="space" surface="dark" width={104} height={26} decorative />
+      </View>
+    </Frame>
+  )
+}
+
+function Centred({
+  top,
+  style,
+  children,
+}: {
+  readonly top: number
+  readonly style: TextStyle
+  readonly children: string
+}) {
+  return (
+    <Text numberOfLines={1} style={[styles.at, styles.wide, { top }, style]}>
+      {children}
+    </Text>
+  )
+}
+
+const MINIMAL_UNIT = type(BODY_HEAVY, 10, INK.muted, { tracking: 3 })
+const MINIMAL_SMALL = type(BODY_HEAVY, 8, INK.ash, { tracking: 1.6 })
+
+/** «FN1 · Una cifra»: the kilos lifted, and what they took. */
+function TotalCard(props: ShareCardProps) {
+  const { summary } = props
+  return (
+    <MinimalFrame {...props}>
+      <Centred top={196} style={type(POSTER, 76, INK.text, { leading: 0.9 })}>
+        {kilos(summary.total_volume_kg)}
+      </Centred>
+      <Centred top={272} style={MINIMAL_UNIT}>
+        KILOS LEVANTADOS
+      </Centred>
+      <Centred top={318} style={type(POSTER, 18, INK.accent)}>
+        {`${String(summary.work_sets)} SERIES · ${exercisesLabel(summary.exercise_count).toUpperCase()}`}
+      </Centred>
+      <Centred top={342} style={MINIMAL_SMALL}>
+        {minutesLine(summary.duration_seconds)}
+      </Centred>
+    </MinimalFrame>
+  )
+}
+
+/** «FN2 · El tiempo»: how long, and the shape of each exercise. */
+function TimeCard(props: ShareCardProps) {
+  const { summary } = props
+  return (
+    <MinimalFrame {...props}>
+      <Centred top={150} style={type(POSTER, 96, INK.text, { leading: 0.9 })}>
+        {durationLabel(summary.duration_seconds)}
+      </Centred>
+      <Centred top={248} style={MINIMAL_UNIT}>
+        ENTRENANDO
+      </Centred>
+      {summary.exercises.slice(0, 5).map((exercise, index) => (
+        <View
+          key={`${String(exercise.position)}`}
+          style={[styles.at, styles.minimalRow, { top: 300 + index * 30 }]}
+        >
+          <Text
+            numberOfLines={1}
+            style={[styles.grow, type(BODY_HEAVY, 9, INK.muted, { tracking: 1.6 })]}
+          >
+            {(exercise.movement ?? 'Ejercicio').toUpperCase()}
+          </Text>
+          <Text style={type(POSTER, 18, index === 0 ? INK.accent : INK.text)}>
+            {exerciseShape(exercise)}
+          </Text>
+        </View>
+      ))}
+    </MinimalFrame>
+  )
+}
+
+/** «FN3 · Récords»: how many, and the one that leads. */
+function RecordsCard(props: ShareCardProps) {
+  const { summary } = props
+  const lead = headline(summary.records)
+  const count = summary.records.length
+  return (
+    <MinimalFrame {...props}>
+      <Centred top={130} style={type(POSTER, 150, INK.accent, { leading: 0.9 })}>
+        {String(count)}
+      </Centred>
+      <Centred top={262} style={MINIMAL_UNIT}>
+        {count === 1 ? 'RÉCORD NUEVO' : 'RÉCORDS NUEVOS'}
+      </Centred>
+      {lead ? (
+        <>
+          <Centred top={312} style={type(BODY_HEAVY, 9, INK.muted, { tracking: 2 })}>
+            {lead.movement.toUpperCase()}
+          </Centred>
+          <Centred top={328} style={type(POSTER, 28, INK.text)}>
+            {recordGain(lead).gain}
+          </Centred>
+          <Centred top={362} style={MINIMAL_SMALL}>
+            {recordGain(lead).meaning}
+          </Centred>
+        </>
+      ) : null}
+    </MinimalFrame>
+  )
+}
+
+const SET_SHADES = ['#55EFFB', '#3FC9D6', '#2E9FAE', '#257C89', '#1D5F69', '#18494F']
+
+/** «FN4 · Músculos»: the sets, split by the muscle each one trained. */
+function SetsCard(props: ShareCardProps) {
+  const { summary, catalogue } = props
+  const main = workedMuscles(summary, catalogue).filter((muscle) => muscle.main)
+  const total = main.reduce((sum, muscle) => sum + muscle.sets, 0) || 1
+  const room = 200 - 2 * Math.max(0, main.length - 1)
+  let left = 50
+  return (
+    <MinimalFrame {...props}>
+      <Centred top={130} style={type(POSTER, 120, INK.text, { leading: 0.9 })}>
+        {String(summary.work_sets)}
+      </Centred>
+      <Centred top={242} style={MINIMAL_UNIT}>
+        {summary.work_sets === 1 ? 'SERIE' : 'SERIES'}
+      </Centred>
+      {main.map((muscle, index) => {
+        const width = Math.max(2, Math.round((room * muscle.sets) / total))
+        const at = left
+        left += width + 2
+        return (
+          <View
+            key={muscle.code}
+            style={[
+              styles.at,
+              styles.segment,
+              {
+                left: at,
+                width,
+                backgroundColor: SET_SHADES[Math.min(index, SET_SHADES.length - 1)],
+              },
+            ]}
+          />
+        )
+      })}
+      {main.slice(0, 3).map((muscle, index) => (
+        <View key={muscle.code} style={[styles.at, styles.minimalRow, { top: 326 + index * 30 }]}>
+          <View style={[styles.legendDot, { backgroundColor: SET_SHADES[index] }]} />
+          <Text
+            numberOfLines={1}
+            style={[styles.grow, type(BODY_HEAVY, 9, INK.muted, { tracking: 1.6 })]}
+          >
+            {muscle.name.toUpperCase()}
+          </Text>
+          <Text style={type(POSTER, 18, index === 0 ? INK.accent : INK.text)}>
+            {String(muscle.sets)}
+          </Text>
+        </View>
+      ))}
+    </MinimalFrame>
+  )
+}
+
 /** The three callouts' columns, as the prototype spaces them. */
 const CALL_LEFTS = [20, 112, 196] as const
 
 const styles = StyleSheet.create({
   card: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 24, overflow: 'hidden' },
+  minimalRow: { left: 62, width: 184, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  segment: { top: 292, height: 6, borderRadius: 3 },
+  legendDot: { width: 6, height: 6, borderRadius: 3 },
   // Drawn over the card and inside it: a border on the box itself grew it by two points
   // and the carousel cut the bottom edge.
   rim: { borderRadius: 24, borderWidth: 1, borderColor: INK.rim },
