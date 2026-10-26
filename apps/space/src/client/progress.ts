@@ -154,21 +154,6 @@ export function periodStart(today: string, kind: PeriodKind): string {
   return isoOf(new Date(date.getTime() - fromMonday * DAY))
 }
 
-/** One sentence to share a period: what was lifted, in how many sessions, and the change. */
-export function shareLine(current: Period, previous: Period | undefined, kind: PeriodKind): string {
-  const sessions = `${String(current.sessions)} ${current.sessions === 1 ? 'sesión' : 'sesiones'}`
-  const head = `Mi ${kind === 'week' ? 'semana' : 'mes'} en Allfit: `
-  const work =
-    current.volume_kg === null
-      ? sessions
-      : `${formatKilos(current.volume_kg)} kg levantados en ${sessions}`
-  const change = percentChange(current.volume_kg, previous?.volume_kg ?? null)
-  const against = kind === 'week' ? 'la semana pasada' : 'el mes pasado'
-  return change === null
-    ? `${head}${work}.`
-    : `${head}${work}, ${change > 0 ? '+' : ''}${String(change)} % frente a ${against}.`
-}
-
 /**
  * The movements as they stood at the period `index` (oldest is 0): the best of that
  * period against the last earlier one. A movement not trained in it is left out.

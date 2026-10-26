@@ -28,14 +28,7 @@ import { useTheme } from '@allfitone/react-native/theme'
 import { BlurView } from 'expo-blur'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  View,
-  type LayoutChangeEvent,
-} from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -62,7 +55,6 @@ import {
   periodStart,
   previousStart,
   programOptions,
-  shareLine,
   sparkline,
   untrained,
   type Period,
@@ -156,7 +148,10 @@ export default function ProgressScreen() {
       offer('period_analysis')
       return
     }
-    void Share.share({ message: shareLine(current, previous, kind) })
+    router.push({
+      pathname: '/progress/share',
+      params: { kind, offset: String(offset), ...(program ? { program } : {}) },
+    })
   }
 
   return (

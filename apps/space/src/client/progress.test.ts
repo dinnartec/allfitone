@@ -11,7 +11,6 @@ import {
   periodStart,
   previousStart,
   programOptions,
-  shareLine,
   sparkline,
   untrained,
   type Period,
@@ -153,21 +152,6 @@ describe('the period on screen', () => {
     expect(periodStart('2026-10-25', 'week')).toBe('2026-10-19')
     expect(periodStart('2026-10-19', 'week')).toBe('2026-10-19')
     expect(periodStart('2026-10-25', 'month')).toBe('2026-10-01')
-  })
-
-  test('T-SPC-UNIT-PROG-12 what is shared says the volume, the sessions and the change', () => {
-    expect(
-      shareLine(
-        period('2026-10-19', { volume_kg: 12480, sessions: 4 }),
-        period('2026-10-12', { volume_kg: 10600 }),
-        'week',
-      ),
-    ).toBe(
-      'Mi semana en Allfit: 12.480 kg levantados en 4 sesiones, +18 % frente a la semana pasada.',
-    )
-    expect(
-      shareLine(period('2026-10-01', { volume_kg: null, sessions: 1 }), undefined, 'month'),
-    ).toBe('Mi mes en Allfit: 1 sesión.')
   })
 })
 

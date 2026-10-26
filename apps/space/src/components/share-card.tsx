@@ -59,7 +59,7 @@ import { BodyFigure, faceShowing } from './body-figure'
 export const CARD_WIDTH = 300
 export const CARD_HEIGHT = 533
 
-const INK = {
+export const INK = {
   text: color.neutral.chalk,
   muted: color.neutral.steel,
   accent: color.brand.primary,
@@ -73,10 +73,10 @@ const INK = {
   rim: '#86BEC840',
 } as const
 
-const POSTER = nativeFontFamily.displayExtraboldItalic
+export const POSTER = nativeFontFamily.displayExtraboldItalic
 // Manrope ships 400, 700 and 800; the design's 600 reads as the 700.
-const BODY_BOLD = nativeFontFamily.bodyBold
-const BODY_HEAVY = nativeFontFamily.bodyExtrabold
+export const BODY_BOLD = nativeFontFamily.bodyBold
+export const BODY_HEAVY = nativeFontFamily.bodyExtrabold
 
 export interface ShareCatalogue {
   readonly movements: readonly Pick<Movement, 'id' | 'muscles'>[]
@@ -148,7 +148,7 @@ export function Scaled({
 // ———————————————————————————————————————————— shared pieces
 
 /** The ground every card shares: a dark gradient, and the photograph when there is one. */
-function Frame({
+export function Frame({
   children,
   photo,
 }: {
@@ -315,7 +315,7 @@ function Swash({
 const ACCENT_ROOM = 0.3
 
 /** A line of text in one of the card faces; `leading` is pen.dev's multiplier. */
-function type(
+export function type(
   family: string,
   size: number,
   fill: string,

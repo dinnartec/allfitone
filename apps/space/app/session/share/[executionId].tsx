@@ -16,41 +16,25 @@
  * and in Instagram that read as shouting.
  *
  * **«Historias» opens Instagram's story composer** with the card as a sticker over the
- * card's own two inks, so the person can place and resize it there. It needs Meta's
- * app id (`EXPO_PUBLIC_META_APP_ID`) and Instagram on the phone; without either it
- * opens the system sheet, as «Más» always does.
+ * card's own two inks, so the person can place and resize it there. What every share
+ * screen does with the picture lives in `share-actions`.
  *
  * **Leaving is always «Terminar».** There is no back to the session: it is closed.
  */
 
 import { Button } from '@allfitone/react-native/button'
-import { FoundationIcon, type IconName } from '@allfitone/react-native/icons'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { PageDots } from '@allfitone/react-native/page-dots'
 import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
 import { Text } from '@allfitone/react-native/text'
-import { InstagramGlyph, instagramGradient } from '@allfitone/react-native/third-party'
 import { Toast } from '@allfitone/react-native/toast'
 import { useTheme } from '@allfitone/react-native/theme'
 import { color, semanticMotion } from '@allfitone/react-native/tokens'
-import * as Clipboard from 'expo-clipboard'
-import * as Haptics from 'expo-haptics'
-import { LinearGradient } from 'expo-linear-gradient'
 import * as ImagePicker from 'expo-image-picker'
-import * as MediaLibrary from 'expo-media-library'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import * as Sharing from 'expo-sharing'
 import { useEffect, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Linking,
-  PixelRatio,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { ActivityIndicator, PixelRatio, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Animated, {
   useAnimatedReaction,
   useAnimatedScrollHandler,
@@ -58,7 +42,6 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Share, { Social } from 'react-native-share'
 import { captureRef } from 'react-native-view-shot'
 import { scheduleOnRN } from 'react-native-worklets'
 
@@ -70,11 +53,21 @@ import {
   cardsFor,
   restoreLabel,
   shareSubtitle,
-  storyRoute,
   type CardKind,
   type ShareSummary,
 } from '../../../src/client/share-cards'
 import { deviceTimezone } from '../../../src/client/timezone'
+import {
+  copyImage,
+  openStory,
+  saveFile,
+  SAVE_FAILED,
+  shareFile,
+  ShareActionRow,
+  SHARE_FAILED,
+  useShareRun,
+  type ShareAction,
+} from '../../../src/components/share-actions'
 import {
   CARD_WIDTH,
   Scaled,
@@ -101,11 +94,6 @@ const SHEET_GONE = 350
 const TOAST_FROM_BOTTOM = 214
 
 const LOAD_FAILED = 'No pudimos preparar tus tarjetas. Tu entreno ya quedó guardado.'
-const SAVE_FAILED = 'No pudimos guardar la imagen. Inténtalo de nuevo.'
-const SHARE_FAILED = 'No pudimos preparar la imagen. Inténtalo de nuevo.'
-const NO_PERMISSION = 'Para guardarla, permite a Allfit añadir fotos en Ajustes.'
-
-type Notice = { readonly tone: 'done' | 'failed'; readonly text: string }
 
 export default function ShareSessionScreen() {
   const { executionId, back } = useLocalSearchParams<{ executionId: string; back?: string }>()
@@ -121,10 +109,9 @@ export default function ShareSessionScreen() {
   const [page, setPage] = useState(0)
   /** A picture from the gallery, held only while this screen is open. */
   const [picked, setPicked] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { busy, notice, clear, run } = useShareRun()
   /** Asking what to do with a picture already picked: another one, or none. */
   const [choosing, setChoosing] = useState(false)
-  const [notice, setNotice] = useState<Notice | undefined>(undefined)
 
   const deck = useRef<Animated.ScrollView>(null)
   const capture = useRef<View>(null)
@@ -173,12 +160,6 @@ export default function ShareSessionScreen() {
   const shown = kinds[page] ?? 'photo'
   const photo = picked ?? summary?.cover_url ?? null
 
-  const say = (next: Notice) => {
-    setNotice(next)
-    if (next.tone === 'done')
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-  }
-
   /** Draws the card in view off screen at story size and hands its file over. */
   const image = (result: 'tmpfile' | 'base64') =>
     // View-shot sizes in points and multiplies by the screen's ratio itself.
@@ -190,58 +171,21 @@ export default function ShareSessionScreen() {
       height: STORY.height / PixelRatio.get(),
     })
 
-  const run = (action: () => Promise<Notice | undefined>, failure: string) => {
-    if (busy) return
-    setBusy(true)
-    setNotice(undefined)
-    action()
-      .then((next) => next && say(next))
-      .catch(() => say({ tone: 'failed', text: failure }))
-      .finally(() => setBusy(false))
-  }
+  const sheet = async () => shareFile(await image('tmpfile'), 'Compartir tu entreno')
 
   const story = () =>
     run(async () => {
-      const appId = process.env.EXPO_PUBLIC_META_APP_ID
-      const installed = await Linking.canOpenURL('instagram-stories://share').catch(() => false)
-      if (storyRoute(appId, installed) === 'sheet' || !appId) return sheet()
       const png = await captureRef(sticker, { format: 'png', quality: 1, result: 'base64' })
-      await Share.shareSingle({
-        social: Social.InstagramStories,
-        appId,
-        stickerImage: `data:image/png;base64,${png}`,
-        backgroundTopColor: STORY_INKS.top,
-        backgroundBottomColor: STORY_INKS.bottom,
-      })
-      return undefined
+      return (await openStory({ sticker: png, inks: STORY_INKS })) ? undefined : sheet()
     }, SHARE_FAILED)
-
-  /** The system sheet: every app the phone has, Instagram among them. */
-  const sheet = async (): Promise<undefined> => {
-    const uri = await image('tmpfile')
-    await Sharing.shareAsync(uri, {
-      mimeType: 'image/png',
-      UTI: 'public.png',
-      dialogTitle: 'Compartir tu entreno',
-    })
-    return undefined
-  }
 
   const share = () => run(sheet, SHARE_FAILED)
 
   const save = () =>
-    run(async () => {
-      const permission = await MediaLibrary.requestPermissionsAsync(true)
-      if (!permission.granted) return { tone: 'failed', text: NO_PERMISSION }
-      await MediaLibrary.Asset.create(await image('tmpfile'))
-      return { tone: 'done', text: 'Guardada en Fotos.' }
-    }, SAVE_FAILED)
+    run(async () => saveFile(await image('tmpfile'), 'Guardada en Fotos.'), SAVE_FAILED)
 
   const copy = () =>
-    run(async () => {
-      await Clipboard.setImageAsync(await image('base64'))
-      return { tone: 'done', text: 'Imagen copiada.' }
-    }, SHARE_FAILED)
+    run(async () => copyImage(await image('base64'), 'Imagen copiada.'), SHARE_FAILED)
 
   // The system picker needs no permission: it hands back only the picture chosen.
   const pick = () =>
@@ -280,11 +224,7 @@ export default function ShareSessionScreen() {
     )
   }
 
-  const actions: readonly {
-    readonly label: string
-    readonly icon: IconName | 'instagram'
-    readonly onPress: () => void
-  }[] = [
+  const actions: readonly ShareAction[] = [
     { label: 'Fondo', icon: 'image', onPress: background },
     { label: 'Historias', icon: 'instagram', onPress: story },
     { label: 'Guardar', icon: 'download', onPress: save },
@@ -340,53 +280,7 @@ export default function ShareSessionScreen() {
         style={styles.dots}
       />
 
-      <View style={styles.actions}>
-        {actions.map((action) => (
-          <Pressable
-            key={action.label}
-            onPress={action.onPress}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={action.label}
-            accessibilityState={{ disabled: busy }}
-            style={styles.action}
-            testID={`share-${action.label}`}
-          >
-            {action.icon === 'instagram' ? (
-              // Instagram's own mark on its own gradient, as Meta's guidelines show it.
-              <LinearGradient
-                colors={[...instagramGradient]}
-                start={{ x: 0, y: 1 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.round}
-              >
-                <InstagramGlyph size={24} decorative />
-              </LinearGradient>
-            ) : (
-              <View
-                style={[
-                  styles.round,
-                  {
-                    backgroundColor: theme.color.background.surface,
-                    borderColor: theme.color.border.subtle,
-                    borderWidth: 1,
-                  },
-                ]}
-              >
-                <FoundationIcon
-                  name={action.icon}
-                  customSize={22}
-                  color={theme.color.text.primary}
-                  decorative
-                />
-              </View>
-            )}
-            <Text role="body" size="xs" color="muted">
-              {action.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <ShareActionRow actions={actions} busy={busy} />
 
       <View style={styles.finish}>
         <Button label="Terminar" variant="secondary" onPress={done} testID="share-finish" />
@@ -417,7 +311,7 @@ export default function ShareSessionScreen() {
         message={notice?.text}
         tone={notice?.tone === 'failed' ? 'danger' : 'success'}
         reduceMotion={reduceMotion}
-        onHide={() => setNotice(undefined)}
+        onHide={clear}
         style={[styles.toast, { bottom: insets.bottom + TOAST_FROM_BOTTOM }]}
         testID="share-toast"
       />
@@ -447,15 +341,6 @@ const styles = StyleSheet.create({
   dots: { alignSelf: 'center', marginTop: 14, marginBottom: 20 },
   toast: { position: 'absolute', alignSelf: 'center' },
   choices: { gap: 12 },
-  actions: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
-  action: { width: 58, alignItems: 'center', gap: 7 },
-  round: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   finish: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   capture: {
     position: 'absolute',
