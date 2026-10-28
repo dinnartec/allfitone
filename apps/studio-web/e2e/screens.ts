@@ -1300,6 +1300,30 @@ export const SCREENS: Screen[] = [
       await expect(page.getByText('No pudimos cargar el estado del vínculo')).toBeVisible()
     },
   },
+  // --- `/organizations/[id]/clients/authorizations` · HU-035 ---
+  {
+    // What every client authorized, across the directory. The widest row is a
+    // person's name beside a category name, so this is where a register with
+    // five columns has to decide between a table and cards.
+    stories: 'HU-035 · what each person authorized us to see',
+    path: `${workspace}/clients/authorizations`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Contexto de salud')).toBeVisible()
+    },
+  },
+  {
+    // The same register as cards, which is what a phone gets.
+    stories: 'HU-035 · what each person authorized, as cards',
+    path: `${workspace}/clients/authorizations`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await settledByHeading(page)
+      await expect(page.getByText('Contexto de salud')).toBeVisible()
+    },
+  },
   // --- `/organizations/[id]/clients/information-categories` · HU-034 ---
   {
     // Seven cards of reference material, each with its own one-line limit. The

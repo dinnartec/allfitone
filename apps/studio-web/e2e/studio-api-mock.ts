@@ -23,6 +23,7 @@ export interface StudioApiFixture {
   memberships: unknown[]
   organizationMemberships: unknown[]
   organizationClients: unknown[]
+  authorizedScopes: unknown[]
   relationshipState: unknown
   relationshipHistory: unknown[]
   assignmentOutcome: 'created' | 'taken' | 'forbidden'
@@ -266,6 +267,38 @@ export const activeSubscription = {
   started_at: '2026-10-01T15:12:44.118Z',
   suspended_at: null,
   ended_at: null,
+}
+
+/*
+ * One standing and one withdrawn, which is the pair HU-STUDIO-035 turns on:
+ * criterion 4 says a withdrawn authorization stays visible, because it is what
+ * explains no longer seeing that part. Values copied from what
+ * `privacy.list_authorized_scopes` really returns.
+ */
+export const grantedHealthContext = {
+  relationship_id: '01991600-7000-7000-8000-000000000101',
+  person_id: '01991600-7000-7000-8000-000000000201',
+  display_name: 'Ana Álvarez',
+  grant_id: '01991600-7000-7000-8000-000000000c01',
+  scope_code: 'health_context',
+  scope_display_name: 'Contexto de salud',
+  version_number: 1,
+  access_level: 'read',
+  status: 'active',
+  purpose: 'Adaptar el entrenamiento a lo que la persona reporte.',
+  granted_at: '2025-03-04T15:12:44.118Z',
+  revoked_at: null,
+}
+
+export const withdrawnBodyProgress = {
+  ...grantedHealthContext,
+  grant_id: '01991600-7000-7000-8000-000000000c02',
+  scope_code: 'body_progress',
+  scope_display_name: 'Progreso corporal',
+  status: 'revoked',
+  purpose: 'Seguir cómo cambia el cuerpo y ajustar el plan.',
+  granted_at: '2025-03-04T15:12:44.118Z',
+  revoked_at: '2025-07-19T10:00:00.000Z',
 }
 
 export const activeClient = {
@@ -736,6 +769,7 @@ export function createStudioApiFixture(
     memberships: [],
     organizationMemberships: [activeTeamMember, terminatedTeamMember],
     organizationClients: [activeClient, pendingClientInvitation, terminatedClient],
+    authorizedScopes: [grantedHealthContext, withdrawnBodyProgress],
     relationshipState: structuredClone(relationshipState),
     relationshipHistory: structuredClone(relationshipHistory),
     assignmentOutcome: 'created',
@@ -929,6 +963,18 @@ function defaultResponse(
         })
       : fixture.organizationClients
     return { status: 200, body: { data, page: { has_more: false, next_cursor: null } } }
+  }
+  if (
+    request.method === 'GET' &&
+    /^\/studio\/v1\/organizations\/[^/]+\/authorized-scopes$/.test(request.path)
+  ) {
+    return {
+      status: 200,
+      body: {
+        data: fixture.authorizedScopes,
+        page: { has_more: false, next_cursor: null },
+      },
+    }
   }
   if (
     request.method === 'GET' &&

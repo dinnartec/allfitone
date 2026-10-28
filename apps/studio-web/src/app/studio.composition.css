@@ -215,6 +215,7 @@
 [data-team-page],
 [data-client-page],
 [data-billing-page],
+[data-authorized-scope-page],
 [data-client-invite-page],
 [data-team-section],
 [data-profile-section],
@@ -488,6 +489,7 @@
 [data-team-member-identity],
 [data-client-identity],
 [data-billing-person],
+[data-authorized-scope-person],
 [data-overview-team-identity] {
   display: flex;
   min-width: 0;
@@ -544,6 +546,7 @@
 [data-team-member-facts] dt,
 [data-client-facts] dt,
 [data-billing-facts] dt,
+[data-authorized-scope-facts] dt,
 [data-relationship-facts] dt,
 [data-credential-details] dt {
   font-family: var(--afo-typography-label-font-family);
@@ -568,6 +571,7 @@
 [data-team-member-facts],
 [data-client-facts],
 [data-billing-facts],
+[data-authorized-scope-facts],
 [data-relationship-facts] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -620,6 +624,7 @@
 [data-team-directory-card-list],
 [data-client-directory-card-list],
 [data-billing-card-list],
+[data-authorized-scope-card-list],
 [data-relationship-substitution-list],
 [data-relationship-grant-cards],
 [data-relationship-history-list],
@@ -742,7 +747,8 @@
    flush against each other and against the note below them. */
 [data-team-directory-cards],
 [data-client-directory-cards],
-[data-billing-cards] {
+[data-billing-cards],
+[data-authorized-scope-cards] {
   display: grid;
   gap: var(--afo-space-4);
 }
@@ -758,7 +764,8 @@
    next column, which is what happened here. */
 [data-team-member-identity],
 [data-client-identity],
-[data-billing-person] {
+[data-billing-person],
+[data-authorized-scope-person] {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
 }
@@ -768,7 +775,8 @@
 }
 
 [data-team-pagination],
-[data-client-pagination] {
+[data-client-pagination],
+[data-authorized-scope-pagination] {
   display: flex;
   justify-content: center;
 }
@@ -776,6 +784,7 @@
 [data-team-directory-note],
 [data-client-directory-note],
 [data-billing-note],
+[data-authorized-scope-note],
 [data-relationship-grant-note] {
   max-width: var(--studio-measure);
 }
