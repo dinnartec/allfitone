@@ -163,6 +163,18 @@ export function ClientDirectoryList() {
             >
               Categorías de información
             </Link>
+            {/* La pareja de la anterior: una dice qué se puede pedir y la otra
+                qué concedió cada quien. Vive aquí y no en el menú lateral
+                porque se consulta mirando a los clientes, no como sección
+                propia. */}
+            <Link
+              href={`/organizations/${current.organization_id}/clients/authorizations`}
+              data-slot="button"
+              data-variant="outline"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Autorizaciones
+            </Link>
             {canInvite ? (
               <Link
                 href={`/organizations/${current.organization_id}/clients/invitations/new`}

@@ -60,6 +60,10 @@ export const studioQueryKeys = {
     [...ROOT_KEY, 'organization', organizationId, 'clients'] as const,
   organizationClients: (organizationId: string, status: ClientFilter, limit: number) =>
     [...ROOT_KEY, 'organization', organizationId, 'clients', { status, limit }] as const,
+  authorizedScopesRoot: (organizationId: string) =>
+    [...ROOT_KEY, 'organization', organizationId, 'authorized-scopes'] as const,
+  authorizedScopes: (organizationId: string, limit: number) =>
+    [...ROOT_KEY, 'organization', organizationId, 'authorized-scopes', { limit }] as const,
   organizationSubscriptionsRoot: (organizationId: string) =>
     [...ROOT_KEY, 'organization', organizationId, 'subscriptions'] as const,
   organizationSubscriptions: (organizationId: string, status: SubscriptionFilter, limit: number) =>
@@ -353,6 +357,27 @@ export function organizationClientsQueryOptions(
           limit,
           ...(pageParam ? { cursor: pageParam } : {}),
         },
+        signal,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: nextPageCursor,
+    staleTime: STUDIO_TEAM_STALE_TIME_MS,
+  })
+}
+
+/*
+ * Held as briefly as a directory page, and for a sharper reason: a person can
+ * take an authorization back at any moment from Space. A stale page here would
+ * show a permission that no longer stands — and this register exists precisely
+ * to explain why something stopped being visible.
+ */
+export function authorizedScopesQueryOptions(organizationId: string, limit: number) {
+  return infiniteQueryOptions({
+    queryKey: studioQueryKeys.authorizedScopes(organizationId, limit),
+    queryFn: ({ pageParam, signal }) =>
+      studioApi.authorizedScopes(
+        organizationId,
+        { limit, ...(pageParam ? { cursor: pageParam } : {}) },
         signal,
       ),
     initialPageParam: null as string | null,

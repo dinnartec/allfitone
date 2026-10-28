@@ -41,6 +41,8 @@ export type OfferableScope = AllfitV1Schemas['OfferableScope']
 export type ClientInvitationCreate = AllfitV1Schemas['ClientInvitationCreate']
 export type ClientInvitation = AllfitV1Schemas['ClientInvitation']
 export type ClientDirectoryPage = AllfitV1Schemas['ClientDirectoryPage']
+export type AuthorizedScopeItem = AllfitV1Schemas['AuthorizedScopeItem']
+export type AuthorizedScopePage = AllfitV1Schemas['AuthorizedScopePage']
 export type ClientDirectoryItem = AllfitV1Schemas['ClientDirectoryItem']
 export type ClientDirectoryRelationship = AllfitV1Schemas['ClientDirectoryRelationship']
 export type ClientDirectoryInvitation = AllfitV1Schemas['ClientDirectoryInvitation']
@@ -314,6 +316,24 @@ export const studioApi = {
     const suffix = query.size ? `?${query.toString()}` : ''
     return request<ClientDirectoryPage>(
       `/studio/v1/organizations/${organizationId}/clients${suffix}`,
+      {
+        cache: 'no-store',
+        ...(signal ? { signal } : {}),
+      },
+    )
+  },
+
+  authorizedScopes: (
+    organizationId: string,
+    options: { limit?: number; cursor?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams()
+    if (options.limit) query.set('limit', String(options.limit))
+    if (options.cursor) query.set('cursor', options.cursor)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return request<AuthorizedScopePage>(
+      `/studio/v1/organizations/${organizationId}/authorized-scopes${suffix}`,
       {
         cache: 'no-store',
         ...(signal ? { signal } : {}),

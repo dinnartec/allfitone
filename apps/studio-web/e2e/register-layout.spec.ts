@@ -40,6 +40,12 @@ const REGISTERS = [
     cards: '[data-team-directory-card-list]',
   },
   {
+    name: 'autorizaciones',
+    path: `/organizations/${ORG}/clients/authorizations`,
+    section: '[data-authorized-scope-page]',
+    cards: '[data-authorized-scope-card-list]',
+  },
+  {
     name: 'vínculo',
     path: `/organizations/${ORG}/clients/${relationshipState.relationship_id}`,
     section: '[data-relationship-state]',
