@@ -4524,6 +4524,69 @@ paths:
         '503':
           $ref: '#/components/responses/UpstreamUnavailable'
 
+  /studio/v1/organizations/{organizationId}/authorized-scopes:
+    get:
+      tags: [Studio Relationships]
+      operationId: listStudioAuthorizedScopes
+      x-allfit-operation: OP-PRV-023
+      x-allfit-cache: private-no-store
+      summary: List what each client authorized the organization to see
+      description: >-
+        Returns one entry per authorization: who granted it, which category it
+        covers, the version agreed, whether it still stands and since when. A
+        withdrawn authorization stays in the list with the date it was
+        withdrawn, because that is what explains no longer seeing that part.
+
+
+        It carries the **state** of each permission and nothing the permission
+        covers. Learning that somebody shared their health context is not
+        reading their health context, and no field here crosses that line.
+
+
+        What comes back depends on the caller. A role holding `view_directory`
+        reads every client's authorizations. A coach reads only those of the
+        clients they attend — narrowed by the relationship's own policy, not by
+        the grant's, which is organization-wide.
+
+
+        This is a report, never the source that decides an access. A reader
+        about to open somebody's data resolves the policy at that moment, inside
+        the transaction that writes the access record; what this returns is
+        already the past by the time it is on screen.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Authorized scope page
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/PrivateNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizedScopePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
   /studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles:
     post:
       tags: [Studio Organizations]
@@ -17910,6 +17973,67 @@ components:
           maxItems: 100
           items:
             $ref: '#/components/schemas/ClientDirectoryItem'
+        page:
+          $ref: '#/components/schemas/Page'
+    AuthorizedScopeItem:
+      description: >-
+        One authorization, as the organization sees it. Every field is about the
+        permission and none is from the data it covers: the category it names,
+        the version agreed, whether it still stands, and the dates that bound
+        it. The day a field carrying content is added here, T-PRV-SCOPES-01
+        fails.
+      type: object
+      additionalProperties: false
+      required:
+        [relationship_id, person_id, display_name, grant_id, scope_code,
+         scope_display_name, version_number, access_level, status, purpose,
+         granted_at, revoked_at]
+      properties:
+        relationship_id:
+          $ref: '#/components/schemas/UuidV7'
+        person_id:
+          $ref: '#/components/schemas/UuidV7'
+        display_name:
+          type: string
+          minLength: 1
+        grant_id:
+          $ref: '#/components/schemas/UuidV7'
+        scope_code:
+          $ref: '#/components/schemas/ScopeCode'
+        scope_display_name:
+          description: >-
+            The words the person was shown for this category. Null when the
+            vocabulary has no presentation row for it, which is a curation gap
+            rather than a missing permission.
+          type: [string, 'null']
+          minLength: 1
+        version_number:
+          type: integer
+          minimum: 1
+        access_level:
+          $ref: '#/components/schemas/AccessLevel'
+        status:
+          $ref: '#/components/schemas/GrantStatus'
+        purpose:
+          type: string
+          minLength: 1
+        granted_at:
+          type: string
+          format: date-time
+        revoked_at:
+          description: When the person took this authorization back, if they did.
+          type: [string, 'null']
+          format: date-time
+    AuthorizedScopePage:
+      type: object
+      additionalProperties: false
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AuthorizedScopeItem'
         page:
           $ref: '#/components/schemas/Page'
     OrganizationCapability:

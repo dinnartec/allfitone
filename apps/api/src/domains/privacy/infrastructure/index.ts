@@ -25,6 +25,8 @@ import type {
   ScopeCommandResult,
   ScopeDefinition,
   ScopeDefinitionDatabase,
+  AuthorizedScope,
+  AuthorizedScopeDatabase,
 } from '../domain/index.js'
 
 type CommandRow = { result: ScopeDefinition; replayed: boolean }
@@ -286,4 +288,71 @@ async function asPerson(transaction: postgres.TransactionSql, personId: string):
     select set_config('app.actor_kind', 'person', true),
            set_config('app.actor_person_id', ${personId}, true)
   `
+}
+
+export function createAuthorizedScopeDatabase(
+  sql: postgres.Sql = database(),
+): AuthorizedScopeDatabase {
+  return {
+    list: (personId, query) =>
+      measureRequestPhase('business-db', () =>
+        sql.begin(async (transaction) => {
+          await asPerson(transaction, personId)
+          // One row over the page, so "is there more" is answered by the read
+          // itself rather than by a second count that could disagree with it.
+          const rows = await transaction<AuthorizedScopeRow[]>`
+            select * from privacy.list_authorized_scopes(
+              ${personId}::uuid,
+              ${query.organizationId}::uuid,
+              ${query.limit + 1}::integer,
+              ${query.cursor?.name ?? null}::text,
+              ${query.cursor?.id ?? null}::uuid
+            )
+          `
+          return {
+            hasMore: rows.length > query.limit,
+            items: rows.slice(0, query.limit).map(toAuthorizedScope),
+          }
+        }),
+      ),
+  }
+}
+
+/**
+ * `sort_name` and `sort_id` stay in the row and never reach the response: they
+ * are how the next page is found, not something a reader asked for. The handler
+ * turns them into the cursor.
+ */
+interface AuthorizedScopeRow {
+  relationship_id: string
+  person_id: string
+  display_name: string
+  grant_id: string
+  scope_code: AuthorizedScope['scope_code']
+  scope_display_name: string | null
+  version_number: number
+  access_level: AuthorizedScope['access_level']
+  status: AuthorizedScope['status']
+  purpose: string
+  granted_at: Date
+  revoked_at: Date | null
+  sort_name: string
+  sort_id: string
+}
+
+function toAuthorizedScope(row: AuthorizedScopeRow): AuthorizedScope {
+  return {
+    relationship_id: row.relationship_id,
+    person_id: row.person_id,
+    display_name: row.display_name,
+    grant_id: row.grant_id,
+    scope_code: row.scope_code,
+    scope_display_name: row.scope_display_name,
+    version_number: row.version_number,
+    access_level: row.access_level,
+    status: row.status,
+    purpose: row.purpose,
+    granted_at: row.granted_at.toISOString(),
+    revoked_at: row.revoked_at ? row.revoked_at.toISOString() : null,
+  }
 }
