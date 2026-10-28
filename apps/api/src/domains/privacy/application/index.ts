@@ -28,6 +28,9 @@ import type {
   ScopeDefinition,
   ScopeDefinitionDatabase,
   ScopeDefinitionPublication,
+  AuthorizedScope,
+  AuthorizedScopeDatabase,
+  AuthorizedScopeQuery,
 } from '../domain/index.js'
 
 export interface ScopeDefinitionService {
@@ -123,5 +126,26 @@ export function createMyConsentService(database: MyConsentDatabase): MyConsentSe
   return {
     listMine: (personId) => database.listMine(personId),
     revoke: (command) => database.revoke(command),
+  }
+}
+
+/*
+ * `OP-PRV-023` for the organization. Which clients the reader may count is
+ * decided by the relationship's own row policy inside the transaction, so there
+ * is no authorization branch here: this layer carries the reader through and
+ * nothing else.
+ */
+export interface AuthorizedScopeService {
+  list(
+    personId: string,
+    query: AuthorizedScopeQuery,
+  ): Promise<{ items: AuthorizedScope[]; hasMore: boolean }>
+}
+
+export function createAuthorizedScopeService(
+  database: AuthorizedScopeDatabase,
+): AuthorizedScopeService {
+  return {
+    list: (personId, query) => database.list(personId, query),
   }
 }

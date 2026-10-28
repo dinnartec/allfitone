@@ -27,6 +27,27 @@ export type ErasureRequestState = AllfitV1Schemas['ErasureRequestState']
 export type LegalHold = AllfitV1Schemas['LegalHold']
 export type LegalHoldApplication = AllfitV1Schemas['LegalHoldApplication']
 export type LegalHoldReason = AllfitV1Schemas['LegalHoldReason']
+export type AuthorizedScope = AllfitV1Schemas['AuthorizedScopeItem']
+export type AuthorizedScopePage = AllfitV1Schemas['AuthorizedScopePage']
+
+export const MAX_AUTHORIZED_SCOPE_PAGE = 100
+export const DEFAULT_AUTHORIZED_SCOPE_PAGE = 50
+
+/**
+ * Keyset, not offset. The register is ordered by the person's name and then by
+ * the grant, so a page resumes from the last pair it handed out rather than
+ * from a count that shifts the moment anybody revokes anything.
+ */
+export interface AuthorizedScopeCursor {
+  name: string
+  id: string
+}
+
+export interface AuthorizedScopeQuery {
+  organizationId: string
+  limit: number
+  cursor?: AuthorizedScopeCursor | undefined
+}
 
 export const SCOPE_CODES: readonly ScopeCode[] = [
   'relationship_training',
@@ -178,4 +199,11 @@ export interface MyConsentCommand {
 export interface MyConsentDatabase {
   listMine(personId: string): Promise<MyConsent[]>
   revoke(command: MyConsentCommand): Promise<{ resource: GrantRevocation; replayed: boolean }>
+}
+
+export interface AuthorizedScopeDatabase {
+  list(
+    personId: string,
+    query: AuthorizedScopeQuery,
+  ): Promise<{ items: AuthorizedScope[]; hasMore: boolean }>
 }

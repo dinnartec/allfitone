@@ -1889,6 +1889,32 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/studio/v1/organizations/{organizationId}/authorized-scopes': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List what each client authorized the organization to see
+     * @description Returns one entry per authorization: who granted it, which category it covers, the version agreed, whether it still stands and since when. A withdrawn authorization stays in the list with the date it was withdrawn, because that is what explains no longer seeing that part.
+     *
+     *     It carries the **state** of each permission and nothing the permission covers. Learning that somebody shared their health context is not reading their health context, and no field here crosses that line.
+     *
+     *     What comes back depends on the caller. A role holding `view_directory` reads every client's authorizations. A coach reads only those of the clients they attend — narrowed by the relationship's own policy, not by the grant's, which is organization-wide.
+     *
+     *     This is a report, never the source that decides an access. A reader about to open somebody's data resolves the policy at that moment, inside the transaction that writes the access record; what this returns is already the past by the time it is on screen.
+     */
+    get: operations['listStudioAuthorizedScopes']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/studio/v1/organizations/{organizationId}/memberships/{membershipId}/roles': {
     parameters: {
       query?: never
@@ -7055,6 +7081,31 @@ export interface components {
     ClientDirectoryGroup: 'active' | 'invited' | 'terminated'
     ClientDirectoryPage: {
       data: components['schemas']['ClientDirectoryItem'][]
+      page: components['schemas']['Page']
+    }
+    /** @description One authorization, as the organization sees it. Every field is about the permission and none is from the data it covers: the category it names, the version agreed, whether it still stands, and the dates that bound it. The day a field carrying content is added here, T-PRV-SCOPES-01 fails. */
+    AuthorizedScopeItem: {
+      relationship_id: components['schemas']['UuidV7']
+      person_id: components['schemas']['UuidV7']
+      display_name: string
+      grant_id: components['schemas']['UuidV7']
+      scope_code: components['schemas']['ScopeCode']
+      /** @description The words the person was shown for this category. Null when the vocabulary has no presentation row for it, which is a curation gap rather than a missing permission. */
+      scope_display_name: string | null
+      version_number: number
+      access_level: components['schemas']['AccessLevel']
+      status: components['schemas']['GrantStatus']
+      purpose: string
+      /** Format: date-time */
+      granted_at: string
+      /**
+       * Format: date-time
+       * @description When the person took this authorization back, if they did.
+       */
+      revoked_at: string | null
+    }
+    AuthorizedScopePage: {
+      data: components['schemas']['AuthorizedScopeItem'][]
       page: components['schemas']['Page']
     }
     OrganizationCapability: {
@@ -13415,6 +13466,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ClientDirectoryPage']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+      503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listStudioAuthorizedScopes: {
+    parameters: {
+      query?: {
+        limit?: number
+        cursor?: components['parameters']['Cursor']
+      }
+      header?: never
+      path: {
+        organizationId: components['parameters']['OrganizationId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Authorized scope page */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['PrivateNoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AuthorizedScopePage']
         }
       }
       400: components['responses']['BadRequest']

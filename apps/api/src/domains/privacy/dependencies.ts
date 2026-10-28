@@ -2,12 +2,14 @@ import {
   createAccessLogService,
   createErasureRequestService,
   createLegalHoldService,
+  createAuthorizedScopeService,
   createMyConsentService,
   createOfferableScopeService,
   createScopeDefinitionService,
   type AccessLogService,
   type ErasureRequestService,
   type LegalHoldService,
+  type AuthorizedScopeService,
   type MyConsentService,
   type OfferableScopeService,
   type ScopeDefinitionService,
@@ -16,6 +18,7 @@ import {
   createAccessLogDatabase,
   createErasureRequestDatabase,
   createLegalHoldDatabase,
+  createAuthorizedScopeDatabase,
   createMyConsentDatabase,
   createOfferableScopeDatabase,
   createScopeDefinitionDatabase,
@@ -27,6 +30,7 @@ let cachedErasure: ErasureRequestService | undefined
 let cachedHolds: LegalHoldService | undefined
 let cachedOfferable: OfferableScopeService | undefined
 let cachedConsents: MyConsentService | undefined
+let cachedAuthorized: AuthorizedScopeService | undefined
 
 export function scopeDefinitionService(): ScopeDefinitionService {
   cachedScopes ??= createScopeDefinitionService(createScopeDefinitionDatabase())
@@ -56,4 +60,9 @@ export function offerableScopeService(): OfferableScopeService {
 export function myConsentService(): MyConsentService {
   cachedConsents ??= createMyConsentService(createMyConsentDatabase())
   return cachedConsents
+}
+
+export function authorizedScopeService(): AuthorizedScopeService {
+  cachedAuthorized ??= createAuthorizedScopeService(createAuthorizedScopeDatabase())
+  return cachedAuthorized
 }
