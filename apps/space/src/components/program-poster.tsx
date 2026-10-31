@@ -106,6 +106,13 @@ export function ProgramPoster({
         </View>
       ) : null}
 
+      {/* Outside the free selection: shown like the rest, and Pro opens taking it. */}
+      {program.locked ? (
+        <View style={styles.lock}>
+          <Badge label="Pro" tone="accent" variant="quiet" />
+        </View>
+      ) : null}
+
       <View style={styles.naming}>
         {/* **La píldora opaca y no la teñida.** El acento translúcido que llevaban se
             perdía sobre una fotografía clara; la variante apagada del sistema pinta el
@@ -161,6 +168,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chip: { position: 'absolute', top: 14, left: 14 },
+  lock: { position: 'absolute', top: 14, right: 14 },
   // Anclado abajo y no arriba: el velo cae ahí, así que es donde el texto se lee.
   naming: { position: 'absolute', left: PAD, right: PAD, bottom: 74, gap: 2 },
   zones: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 8 },

@@ -10,6 +10,7 @@ import type {
   FinishedExecution,
   HistoryMonth,
   HistoryPage,
+  PeriodComparison,
 } from '../domain/index.js'
 import { spaceExecutionRoutes } from './space.js'
 
@@ -117,11 +118,13 @@ const historyPage: HistoryPage = {
       thumbnail_url: 'https://media.example/movements/press/demo.webp',
     },
   ],
+  window: { visible_from: null, has_hidden: false },
   page: { next_cursor: null, has_more: false },
 }
 
 const historyMonth: HistoryMonth = {
   month: '2026-09-01',
+  visible_from: null,
   sessions: 1,
   trained_seconds: 3120,
   work_sets: 14,
@@ -204,6 +207,7 @@ function harness(overrides?: Partial<SpaceExecutionService>, actorFails = false)
     }),
     listHistory: async () => historyPage,
     readHistoryMonth: async () => historyMonth,
+    comparePeriods: async () => comparison,
     readFinished: async () => finished,
     revise: async () => ({ id: EXECUTION_ID, revision_number: 5, result_count: 12 }),
     annul: async () => ({ id: EXECUTION_ID, annulled_at: '2026-10-01T12:00:00.000Z' }),
@@ -247,6 +251,57 @@ const start = {
   timezone: 'America/Bogota',
   requested_level: 'detailed',
   capture_source: 'manual',
+}
+
+const comparison: PeriodComparison = {
+  period: 'week',
+  periods: [
+    {
+      starts_on: '2026-10-12',
+      sessions: 2,
+      active_days: 2,
+      trained_seconds: 5400,
+      work_sets: 24,
+      volume_kg: 8200,
+      planned: 3,
+      fulfilled: 2,
+      muscles: [{ code: 'chest', name: 'Pecho', sets: 12 }],
+      unplanned: 0,
+      days: [{ trained_on: '2026-10-13', volume_kg: 4100 }],
+    },
+    {
+      starts_on: '2026-10-19',
+      sessions: 3,
+      active_days: 3,
+      trained_seconds: 7800,
+      work_sets: 33,
+      volume_kg: 9650,
+      planned: 3,
+      fulfilled: 3,
+      muscles: [{ code: 'chest', name: 'Pecho', sets: 15 }],
+      unplanned: 1,
+      days: [{ trained_on: '2026-10-20', volume_kg: 4800 }],
+    },
+  ],
+  programs: [
+    {
+      assignment_id: '019ef600-0000-7000-8000-0000000000c1',
+      title: 'Semana',
+      from_gym: false,
+      planned: [3, 3],
+      fulfilled: [2, 3],
+    },
+  ],
+  movements: [
+    {
+      movement_id: '019ef600-0000-7000-8000-0000000000a1',
+      name: 'Press',
+      best_kg: 82.5,
+      previous_best_kg: 80,
+      change_kg: 2.5,
+      bests: [80, 82.5],
+    },
+  ],
 }
 
 describe('the Space execution surface honours the contract', () => {
@@ -827,5 +882,78 @@ describe('a finished session: its detail, corrections, annulment and repeat', ()
     )
 
     expect(response.status).toBe(409)
+  })
+})
+
+describe('GET /space/v1/progress/periods', () => {
+  test('T-EXE-API-30 answers the periods with the person and the zone', async () => {
+    let asked: unknown
+    const watching = harness({
+      comparePeriods: async (input) => {
+        asked = { timezone: input.timezone, period: input.period, count: input.count }
+        return comparison
+      },
+    })
+    const response = await watching.request(
+      '/space/v1/progress/periods?timezone=America/Bogota&period=week&count=8',
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual(comparison)
+    expect(asked).toEqual({ timezone: 'America/Bogota', period: 'week', count: 8 })
+  })
+
+  test('T-EXE-API-33 reads one programme, or what was trained without one', async () => {
+    const asked: unknown[] = []
+    const watching = harness({
+      comparePeriods: async (input) => {
+        asked.push(input.program)
+        return comparison
+      },
+    })
+    for (const program of ['019ef600-0000-7000-8000-0000000000c1', 'free']) {
+      const response = await watching.request(
+        `/space/v1/progress/periods?timezone=America/Bogota&period=week&count=6&program=${program}`,
+        { headers: authorized },
+      )
+      expect(response.status).toBe(200)
+    }
+    expect(asked).toEqual(['019ef600-0000-7000-8000-0000000000c1', 'free'])
+  })
+
+  test('T-EXE-API-31 a plan without the comparison says which function it lacks', async () => {
+    const refused = harness({
+      comparePeriods: async () => {
+        throw Object.assign(new Error('this function comes with Pro'), {
+          code: 'AF402',
+          detail: 'period_analysis',
+        })
+      },
+    })
+    const response = await refused.request(
+      '/space/v1/progress/periods?timezone=America/Bogota&period=month&count=6',
+      { headers: authorized },
+    )
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ feature: 'period_analysis' })
+  })
+
+  test('T-EXE-API-32 refuses a period, a count or a zone outside the contract', async () => {
+    for (const query of [
+      'timezone=America/Bogota&period=day&count=4',
+      'timezone=America/Bogota&period=week&count=1',
+      'timezone=America/Bogota&period=week&count=13',
+      'timezone=America/Bogota&period=week&count=two',
+      'period=week&count=4',
+      'timezone=America/Bogota&period=week&count=4&program=mine',
+    ]) {
+      const response = await harness().request(`/space/v1/progress/periods?${query}`, {
+        headers: authorized,
+      })
+      expect(response.status).toBe(400)
+    }
   })
 })

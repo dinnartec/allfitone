@@ -40,7 +40,7 @@ export type SessionTokens = AllfitV1Schemas['SpaceSessionTokens']
 export type SessionRefreshed = AllfitV1Schemas['SpaceSessionRefreshed']
 
 export { ApiError, type ApiFailure } from './api-error'
-import { ApiError, failureFor } from './api-error'
+import { ApiError, apiErrorFrom } from './api-error'
 
 /** The port the API listens on. Only the host varies between simulator and device. */
 const API_PORT = 8080
@@ -115,7 +115,7 @@ async function post<T>(
     })
   }
 
-  if (!response.ok) throw new ApiError(failureFor(response.status))
+  if (!response.ok) throw await apiErrorFrom(response)
 
   return (await readJsonBody<T>(response)) as T
 }
@@ -234,7 +234,7 @@ export async function authorizedPost<T>(
     done()
   }
 
-  if (!response.ok) throw new ApiError(failureFor(response.status))
+  if (!response.ok) throw await apiErrorFrom(response)
 
   return (await readJsonBody<T>(response)) as T
 }
@@ -279,7 +279,7 @@ export async function authorizedPut<T>(
     done()
   }
 
-  if (!response.ok) throw new ApiError(failureFor(response.status))
+  if (!response.ok) throw await apiErrorFrom(response)
 
   return (await readJsonBody<T>(response)) as T
 }
@@ -319,7 +319,7 @@ export async function authorizedSend<T>(
     done()
   }
 
-  if (!response.ok) throw new ApiError(failureFor(response.status))
+  if (!response.ok) throw await apiErrorFrom(response)
 
   return (await readJsonBody<T>(response)) as T
 }
@@ -362,7 +362,7 @@ export async function authorizedGet<T>(path: string, token?: string): Promise<T>
     done()
   }
 
-  if (!response.ok) throw new ApiError(failureFor(response.status))
+  if (!response.ok) throw await apiErrorFrom(response)
 
   return (await readJsonBody<T>(response)) as T
 }
@@ -393,7 +393,7 @@ export async function authorizedRead<T>(path: string, body: unknown, token?: str
     done()
   }
 
-  if (!response.ok) throw new ApiError(failureFor(response.status))
+  if (!response.ok) throw await apiErrorFrom(response)
 
   return (await readJsonBody<T>(response)) as T
 }

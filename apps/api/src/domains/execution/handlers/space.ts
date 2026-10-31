@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
-import { fail } from '../../../platform/http/index.js'
+import { fail, failPlanLimit, planLimitFeature } from '../../../platform/http/index.js'
 import {
   SpaceActorError,
   spaceActorResolver,
@@ -193,6 +193,39 @@ export function spaceExecutionRoutes(
         requestId: c.req.header('x-request-id') ?? '',
       })
       return c.json(found, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  routes.get('/progress/periods', async (c) => {
+    c.header('Cache-Control', 'no-store')
+
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const timezone = readTimezone(c)
+    const period = c.req.query('period')
+    const count = Number(c.req.query('count'))
+    if (!timezone || (period !== 'week' && period !== 'month')) return fail(c, 'invalid-request')
+    if (!Number.isInteger(count) || count < 2 || count > 12) return fail(c, 'invalid-request')
+    // One programme, what was trained without one, or everything when absent.
+    const program = c.req.query('program')
+    if (program !== undefined && program !== 'free' && !UUID_V7.test(program)) {
+      return fail(c, 'invalid-request')
+    }
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const comparison = await execution().comparePeriods({
+        personId,
+        timezone,
+        period,
+        count,
+        program: program ?? null,
+        requestId: c.req.header('x-request-id') ?? '',
+      })
+      return c.json(comparison, 200)
     } catch (cause) {
       return failure(c, cause)
     }
@@ -461,6 +494,9 @@ function readHistoryQuery(c: Context) {
 
 function failure(c: Context, cause: unknown): Response {
   if (cause instanceof SpaceActorError) return fail(c, 'forbidden')
+  // The plan does not open this: the app offers Pro for exactly the function named.
+  const feature = planLimitFeature(cause)
+  if (feature) return failPlanLimit(c, feature)
   if (typeof cause === 'object' && cause !== null && 'code' in cause) {
     const code = (cause as { code: unknown }).code
     // The SQLSTATE, not the message: a refusal without it is a 400 nobody can chase.

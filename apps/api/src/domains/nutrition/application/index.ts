@@ -244,6 +244,8 @@ export function createSpaceNutritionService(
     },
 
     async recognize({ personId, photo, requestId }) {
+      // The plan first: without it the photo is not even sanitised.
+      await database.requireRecognition({ personId, requestId })
       const consent = await consentOf(personId, requestId)
       if (consent.accepted_version !== CURRENT_CONSENT_VERSION) throw new ConsentRequired()
 

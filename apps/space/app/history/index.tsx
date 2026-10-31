@@ -24,6 +24,7 @@ import { Chip } from '@allfitone/react-native/chip'
 import { InlineAlert } from '@allfitone/react-native/inline-alert'
 import { Screen } from '@allfitone/react-native/screen'
 import { Sheet } from '@allfitone/react-native/sheet'
+import { FoundationIcon } from '@allfitone/react-native/icons'
 import { Text } from '@allfitone/react-native/text'
 import { TextField } from '@allfitone/react-native/text-field'
 import { useTheme } from '@allfitone/react-native/theme'
@@ -49,6 +50,8 @@ import {
 import { deviceTimezone } from '../../src/client/timezone'
 import { trainedLabel } from '../../src/client/week'
 import { HistoryGroupHeader, HistoryPanel, HistoryRow } from '../../src/components/history-row'
+import { usePlan, useUpgradeSheet } from '../../src/components/upgrade-sheet'
+import { shortDate } from '../../src/client/pro'
 
 const PAGE = 20
 const SEARCH_PAUSE_MS = 300
@@ -87,6 +90,10 @@ export default function HistoryScreen() {
   /** A day picked on the calendar: the card and the list narrow to it. */
   const [day, setDay] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  // The first day the plan shows, when older sessions are kept behind it.
+  const [keptBefore, setKeptBefore] = useState<string | null>(null)
+  const features = usePlan()
+  const upgrade = useUpgradeSheet(features)
   /** Which request is current: an answer to an older one is dropped, not drawn. */
   const asked = useRef(0)
   /** Set once the person picks a month; until then an empty month gives way to the latest. */
@@ -149,6 +156,7 @@ export default function HistoryScreen() {
         if (asked.current !== id) return
         setItems(page.data)
         setCursor(page.page.has_more ? page.page.next_cursor : null)
+        setKeptBefore(page.window.has_hidden ? page.window.visible_from : null)
       })
       .catch(() => asked.current === id && setFailure(READ_FAILED))
     // `request` reads exactly these, so the list is asked again when any of them changes.
@@ -296,6 +304,28 @@ export default function HistoryScreen() {
         ListFooterComponent={
           loadingMore ? (
             <ActivityIndicator color={theme.color.icon.accent} style={styles.loading} />
+          ) : !cursor && keptBefore ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => upgrade.offer('training_history_months')}
+              style={[
+                styles.kept,
+                {
+                  borderColor: theme.color.accent.tonalBorder,
+                  backgroundColor: theme.color.accent.tonal,
+                },
+              ]}
+            >
+              <FoundationIcon name="locked" size="md" color={theme.color.icon.accent} decorative />
+              <View style={styles.keptCopy}>
+                <Text role="control" size="sm">
+                  {`Lo anterior al ${shortDate(`${keptBefore}T12:00:00`)} sigue guardado`}
+                </Text>
+                <Text role="body" size="xs" color="secondary">
+                  Con Pro lo vuelves a ver, desde tu primer entreno.
+                </Text>
+              </View>
+            </Pressable>
           ) : null
         }
       />
@@ -355,6 +385,7 @@ export default function HistoryScreen() {
           </View>
         </View>
       </Sheet>
+      {upgrade.sheet}
     </Screen>
   )
 }
@@ -535,6 +566,16 @@ function MonthCard({
 }
 
 const styles = StyleSheet.create({
+  kept: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    marginTop: 12,
+  },
+  keptCopy: { flex: 1, gap: 2 },
   header: { gap: 14, paddingTop: 8, paddingBottom: 14, paddingHorizontal: 20 },
   content: { paddingHorizontal: 20, paddingBottom: 32, gap: 14 },
   listHead: { gap: 14 },

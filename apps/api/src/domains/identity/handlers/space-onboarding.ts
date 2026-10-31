@@ -24,14 +24,16 @@ import type {
   BiologicalSex,
   BodyProgressDeclaration,
   FocusArea,
+  LengthMetric,
   LengthUnit,
+  MassMetric,
   MassUnit,
   PrimaryTrainingGoal,
   ProfileClaimDeclaration,
   TrainingDiscipline,
   TrainingExperience,
 } from '../domain/index.js'
-import { fail } from '../../../platform/http/index.js'
+import { fail, failPlanLimit, planLimitFeature } from '../../../platform/http/index.js'
 import {
   OnboardingPreconditionError,
   type SpaceOnboardingService,
@@ -608,6 +610,15 @@ function readCompletion(body: unknown):
 
 const MASS_UNITS: readonly MassUnit[] = ['kg', 'lb']
 const LENGTH_UNITS: readonly LengthUnit[] = ['cm', 'in']
+const MASS_METRICS: readonly MassMetric[] = ['body_weight', 'muscle_mass']
+const LENGTH_METRICS: readonly LengthMetric[] = [
+  'body_height',
+  'waist',
+  'hip',
+  'chest',
+  'arm',
+  'thigh',
+]
 
 /** Steps `HU-SP-015` allows skipping. Never the age, the name or the terms. */
 const SKIPPABLE_STEPS: readonly string[] = ['body_measures']
@@ -638,15 +649,16 @@ function readBodyProgress(body: unknown): BodyProgressDeclaration | undefined {
   if (typeof measuredOn !== 'string' || !ISO_DATE.test(measuredOn)) return undefined
   if (Number.isNaN(Date.parse(measuredOn))) return undefined
 
-  if (metric === 'body_weight') {
-    return MASS_UNITS.includes(unit as MassUnit)
-      ? { metricCode: metric, value, unit: unit as MassUnit, measuredOn }
-      : undefined
+  const mass = MASS_METRICS.find((code) => code === metric)
+  const massUnit = MASS_UNITS.find((code) => code === unit)
+  if (mass) return massUnit ? { metricCode: mass, value, unit: massUnit, measuredOn } : undefined
+  const length = LENGTH_METRICS.find((code) => code === metric)
+  const lengthUnit = LENGTH_UNITS.find((code) => code === unit)
+  if (length) {
+    return lengthUnit ? { metricCode: length, value, unit: lengthUnit, measuredOn } : undefined
   }
-  if (metric === 'body_height') {
-    return LENGTH_UNITS.includes(unit as LengthUnit)
-      ? { metricCode: metric, value, unit: unit as LengthUnit, measuredOn }
-      : undefined
+  if (metric === 'body_fat' && unit === 'percent') {
+    return { metricCode: metric, value, unit, measuredOn }
   }
   return undefined
 }
@@ -673,6 +685,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 /** Same mapping the sibling handlers use: the SQLSTATE is the signal. */
 function operationFailure(c: Context, error: unknown) {
   if (error instanceof OnboardingPreconditionError) return fail(c, error.code)
+  // A measurement beyond weight and height needs Pro once onboarding is done.
+  const feature = planLimitFeature(error)
+  if (feature) return failPlanLimit(c, feature)
   const sqlState = isObject(error) && typeof error.code === 'string' ? error.code : undefined
   if (sqlState === '42501') return fail(c, 'forbidden')
   if (sqlState === '23505' || sqlState === '40001') return fail(c, 'conflict')

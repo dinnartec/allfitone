@@ -68,6 +68,7 @@ export interface ContentTransport {
   ): Promise<SessionTemplateVersion>
   readTemplateDraft(templateId: string): Promise<SessionTemplateDraft>
   discardTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
+  duplicateTemplate(command: CommandHeaders, templateId: string): Promise<SessionTemplate>
   readProgramDraft(programId: string): Promise<ProgramDraft>
   readMyUnpublishedProgram(): Promise<Program | null>
   discardProgram(command: CommandHeaders, programId: string): Promise<Program>
@@ -134,6 +135,8 @@ export interface ContentFlow {
   removeProgram(programId: string, withRoutines: boolean): Promise<Program>
   /** Una copia en borrador, que no existe para nadie hasta que se publique. */
   duplicateProgram(programId: string): Promise<Program>
+  /** A draft copy of one of the person's routines; Pro opens it (`routine_duplication`). */
+  duplicateTemplate(templateId: string): Promise<SessionTemplate>
   createProgram(title: string): Promise<Program>
   saveProgramDraft(programId: string, content: ProgramDraftContent): Promise<ProgramDraft>
   /** Publishing leaves the author following it; the server takes or restates, never both. */
@@ -264,6 +267,11 @@ export function createContentFlow(dependencies: ContentFlowDependencies): Conten
       )
       etags.delete(programId)
       return program
+    },
+
+    async duplicateTemplate(templateId) {
+      // A new command each time, as for programmes: two presses are two copies.
+      return dependencies.transport.duplicateTemplate(dependencies.newCommand(), templateId)
     },
 
     async duplicateProgram(programId) {

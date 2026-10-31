@@ -1,5 +1,5 @@
 /**
- * The photo of a meal, made safe to keep (ADR-039).
+ * A person's photo, made safe to keep (ADR-039): a meal, or their body.
  *
  * Re-encoded rather than edited: decoding and writing a new JPEG leaves every byte of
  * metadata behind — EXIF, GPS, the camera, the time it was taken — because sharp writes
@@ -10,7 +10,19 @@
 
 import sharp from 'sharp'
 
-import { PhotoRejected, type PhotoSanitizer } from '../domain/index.js'
+/** Makes a photo safe to keep: no EXIF, no location, a bounded size, one format. */
+export interface PhotoSanitizer {
+  /** `longestSide` caps the image; 1600 px when it is not said. */
+  sanitize(bytes: Uint8Array, longestSide?: number): Promise<Uint8Array>
+}
+
+/** The photo could not be read as an image, so nothing is stored (fails closed). */
+export class PhotoRejected extends Error {
+  constructor(cause: unknown) {
+    super('the photo could not be sanitised', { cause })
+    this.name = 'PhotoRejected'
+  }
+}
 
 /** Enough for a phone at full width, and a fraction of what a camera writes. */
 const LONGEST_SIDE = 1600

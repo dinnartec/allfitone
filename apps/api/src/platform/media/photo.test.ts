@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import sharp from 'sharp'
 
-import { PhotoRejected } from '../domain/index.js'
-import { createSharpSanitizer } from './photo.js'
+import { PhotoRejected, createSharpSanitizer } from './photo.js'
 
 // A real JPEG with an author and a GPS position written into its EXIF.
 async function photographWithLocation(width: number): Promise<Uint8Array> {

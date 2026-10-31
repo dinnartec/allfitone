@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto'
 import type { VerifiedToken } from '@allfitone/auth-provider'
 import { Hono, type Context } from 'hono'
 
-import { fail } from '../../../platform/http/index.js'
+import { fail, failPlanLimit, planLimitFeature } from '../../../platform/http/index.js'
 import {
   SpaceActorError,
   spaceActorResolver,
@@ -199,6 +199,25 @@ export function spacePlanningRoutes(
         ...command,
       })
       return c.json(template, 200)
+    } catch (cause) {
+      return failure(c, cause)
+    }
+  })
+
+  // The new routine, never the original. Without a body, as duplicating a programme.
+  routes.post('/session-templates/:templateId/duplicate', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const token = await verified(c, verify)
+    if (!token) return fail(c, 'unauthenticated')
+
+    const templateId = c.req.param('templateId')
+    const command = commandContext(c, undefined)
+    if (!UUID_V7.test(templateId) || !command) return fail(c, 'invalid-request')
+
+    try {
+      const personId = await actors().personFor(token.subject)
+      const copy = await planning().duplicateMySessionTemplate({ personId, templateId, ...command })
+      return c.json(copy, 200)
     } catch (cause) {
       return failure(c, cause)
     }
@@ -579,6 +598,9 @@ export function spacePlanningRoutes(
 
 function failure(c: Context, cause: unknown): Response {
   if (cause instanceof SpaceActorError) return fail(c, 'forbidden')
+  // The plan does not open this: the app offers Pro for exactly the function named.
+  const feature = planLimitFeature(cause)
+  if (feature) return failPlanLimit(c, feature)
   // A version the person may not reach answers `42501` from the database, which is
   // the same thing the policy would have said: not yours.
   if (typeof cause === 'object' && cause !== null && 'code' in cause) {

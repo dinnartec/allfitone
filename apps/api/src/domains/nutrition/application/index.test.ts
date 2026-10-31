@@ -43,6 +43,7 @@ function harness(
       sealed.push(mediaRef)
     },
     readMeal: async () => row({ media_ref: 'nutrition/p/m/photo.jpg' }),
+    requireRecognition: async () => {},
     ...database,
   } as NutritionDatabase
   const clean: PhotoSanitizer = sanitizer ?? { sanitize: async () => new Uint8Array([9, 9]) }
@@ -231,6 +232,27 @@ const consented = {
 }
 
 describe('recognising a photo (ADR-041, OP-NUT-016)', () => {
+  test('T-NUT-API-UNIT-31 a plan without recognition stops the photo before anything else', async () => {
+    const refusal = Object.assign(new Error('this function comes with Pro'), {
+      code: 'AF402',
+      detail: 'meal_photo_recognition',
+    })
+    let consentRead = false
+    const { service, recognizer } = harness({
+      requireRecognition: async () => {
+        throw refusal
+      },
+      readConsent: async () => {
+        consentRead = true
+        return { accepted_version: CURRENT_CONSENT_VERSION, accepted_at: '2026-10-04T00:00:00Z' }
+      },
+    })
+    expect(service.recognize({ personId: PERSON, photo, requestId: '' })).rejects.toBe(refusal)
+    await Promise.resolve()
+    expect(consentRead).toBe(false)
+    expect(recognizer.seen).toHaveLength(0)
+  })
+
   test('T-NUT-API-UNIT-14 without consent the photo never leaves Allfit', async () => {
     const { service, recognizer } = harness({
       readConsent: async () => ({ accepted_version: null, accepted_at: null }),

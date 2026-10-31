@@ -288,12 +288,14 @@ export default function NutritionHistoryScreen() {
                   {title}
                 </Text>
                 <Text role="body" size="sm" color="muted">
-                  {one.meal_count === 0
-                    ? 'Sin registro'
-                    : `${title === 'Hoy' || title === 'Ayer' ? `${plain} · ` : ''}${String(one.meal_count)} ${one.meal_count === 1 ? 'comida' : 'comidas'}`}
+                  {one.hidden
+                    ? 'Guardado: lo vuelves a ver con Pro'
+                    : one.meal_count === 0
+                      ? 'Sin registro'
+                      : `${title === 'Hoy' || title === 'Ayer' ? `${plain} · ` : ''}${String(one.meal_count)} ${one.meal_count === 1 ? 'comida' : 'comidas'}`}
                 </Text>
               </View>
-              {one.meal_count > 0 ? (
+              {(one.meal_count ?? 0) > 0 ? (
                 <Text role="poster" tracking={FIGURE_TRACKING} size="xl">
                   {Math.round(eatenFor(one, 'energy')).toLocaleString('es-CO')}
                   <Text role="body" size="xs" color="muted">

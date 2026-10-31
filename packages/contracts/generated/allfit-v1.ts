@@ -2857,6 +2857,28 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/space/v1/session-templates/{templateId}/duplicate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start a routine of my own from one I already have
+     * @description Copies one of the person's own routines into a new draft named after it with a copy suffix, as `OP-PLN-035` does for programmes: what is edited is what is copied, so the draft goes first and the latest version when there is none. The original is left untouched.
+     *
+     *     **It is Pro** (`routine_duplication`), and the copy is one more of the person's routines, so it also counts against `own_routines`. A plan that does not open either answers `plan-limit-reached` naming the function.
+     */
+    post: operations['duplicateMySessionTemplate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/space/v1/session-templates/{templateId}/versions': {
     parameters: {
       query?: never
@@ -3197,6 +3219,28 @@ export interface paths {
      * @description The month's totals, each ISO week with what was finished, planned and free, the months there is something to see in, and the disciplines present (ADR-037).
      */
     get: operations['getMyHistoryMonth']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/progress/periods': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Compare my training week by week or month by month
+     * @description HU-SP-061. Each period says what was trained, the time, the work sets, the volume and how much of the plan was kept; each movement says its best load against the last earlier period it was trained in. Warm-up sets never count, and a set nobody weighed is not zero lifted. Oldest period first.
+     *
+     *     **It is Pro** (`period_analysis`): a plan that does not open it answers `plan-limit-reached`.
+     */
+    get: operations['compareMyPeriods']
     put?: never
     post?: never
     delete?: never
@@ -4214,6 +4258,50 @@ export interface paths {
      * @description The measurement is deleted physically, now, and a disposition case records that body data was deleted at the person's request and under which policy, without keeping the value. Deleting data is not revoking a permission: grants are untouched. Someone else's measurement and one that does not exist both answer 404.
      */
     delete: operations['deleteSpaceBodyProgress']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/body-photos': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * My body photos, newest first
+     * @description HU-SP-026. A body photo is the person's alone: no consent scope covers it, so no gym or professional ever reads it. Each comes with a URL signed for five minutes; the storage key never leaves the API. Reading one's own photos is never limited by a plan.
+     */
+    get: operations['listMyBodyPhotos']
+    put?: never
+    /**
+     * Keep a photo of my body
+     * @description HU-SP-025. The photo is sanitised (no EXIF, longest side 1600 px) and stored privately under the person before the record is written; if the record fails the object is removed. **It is Pro** (`body_photos`).
+     */
+    post: operations['recordMyBodyPhoto']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/space/v1/body-photos/{photoId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete a photo of my body
+     * @description HU-SP-027. The record goes in the same transaction that queues its object; the API removes the object after the commit. Deleting one's own photos is never limited by a plan.
+     */
+    delete: operations['deleteMyBodyPhoto']
     options?: never
     head?: never
     patch?: never
@@ -5746,10 +5834,19 @@ export interface components {
       person_id: components['schemas']['UuidV7']
     }
     /**
-     * @description The two metrics V1 records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person.
+     * @description The metrics a person records. The `body_` prefix is not decoration: `metric_code` also names execution results, where `weight` is the load on the bar rather than the weight of the person. Weight and height are free; the rest are Pro (`body_measurements`).
      * @enum {string}
      */
-    BodyMetric: 'body_weight' | 'body_height'
+    BodyMetric:
+      | 'body_weight'
+      | 'body_height'
+      | 'muscle_mass'
+      | 'body_fat'
+      | 'waist'
+      | 'hip'
+      | 'chest'
+      | 'arm'
+      | 'thigh'
     /**
      * @description Kilograms are canonical; a pound is 0.45359237 of one.
      * @enum {string}
@@ -5764,6 +5861,9 @@ export interface components {
     SpaceBodyProgressDeclaration:
       | components['schemas']['SpaceBodyWeightDeclaration']
       | components['schemas']['SpaceBodyHeightDeclaration']
+      | components['schemas']['SpaceBodyMassDeclaration']
+      | components['schemas']['SpaceBodyLengthDeclaration']
+      | components['schemas']['SpaceBodyFatDeclaration']
     SpaceBodyWeightDeclaration: {
       /**
        * @description discriminator enum property added by openapi-typescript
@@ -5787,6 +5887,43 @@ export interface components {
       /** Format: date */
       measured_on: string
     }
+    /** @description Pro (`body_measurements`). */
+    SpaceBodyMassDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'muscle_mass'
+      value: number
+      unit: components['schemas']['MassUnit']
+      /** Format: date */
+      measured_on: string
+    }
+    /** @description Pro (`body_measurements`). */
+    SpaceBodyLengthDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'waist' | 'hip' | 'chest' | 'arm' | 'thigh'
+      value: number
+      unit: components['schemas']['LengthUnit']
+      /** Format: date */
+      measured_on: string
+    }
+    /** @description Pro (`body_measurements`). */
+    SpaceBodyFatDeclaration: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      metric_code: 'body_fat'
+      value: number
+      /** @constant */
+      unit: 'percent'
+      /** Format: date */
+      measured_on: string
+    }
     /** @description Everything the first-day screen needs in one answer: what Allfit publishes, what the person told us, and whether they already chose. */
     SpaceProgramCatalogue: {
       profile: components['schemas']['SpaceTrainingProfile']
@@ -5804,6 +5941,10 @@ export interface components {
     }
     /** @description A published version of a global program, with the segmentation it was published with. The segmentation is part of the version and immutable with it: re-aiming a program means publishing another version. */
     SpaceProgramSummary: {
+      /** @description True when the person's plan does not open this programme: it is shown, and taking it answers `plan-limit-reached`. */
+      locked: boolean
+      /** @description The function of the plan catalogue that opens this programme, or null when it is in the free selection. */
+      unlock_feature: string | null
       program_version_id: components['schemas']['UuidV7']
       program_id: components['schemas']['UuidV7']
       title: string
@@ -5945,8 +6086,18 @@ export interface components {
       thumbnail_url: string | null
     }
     SpaceHistoryPage: {
+      window: components['schemas']['SpaceHistoryWindow']
       data: components['schemas']['SpaceHistoryItem'][]
       page: components['schemas']['Page']
+    }
+    /** @description Where the visible history starts under the person's plan, and whether older sessions are kept behind it. Nothing outside the window is deleted: with Pro it is seen again. */
+    SpaceHistoryWindow: {
+      /**
+       * Format: date
+       * @description The first visible day; null when nothing is hidden.
+       */
+      visible_from: string | null
+      has_hidden: boolean
     }
     /** @description An ISO week counted whole, even where it crosses into another month. */
     SpaceHistoryWeek: {
@@ -5982,6 +6133,11 @@ export interface components {
        * @description The first day of the month.
        */
       month: string
+      /**
+       * Format: date
+       * @description The first day the person's plan shows; sessions before it are kept and left out. Null when nothing is hidden.
+       */
+      visible_from: string | null
       sessions: number
       trained_seconds: number
       work_sets: number
@@ -8516,6 +8672,7 @@ export interface components {
     /**
      * @example {
      *       "local_date": "2026-07-28",
+     *       "hidden": false,
      *       "meal_count": 3,
      *       "nutrient_totals": [
      *         {
@@ -8535,11 +8692,18 @@ export interface components {
     NutritionDailySummary: {
       /** Format: date */
       local_date: string
-      meal_count: number
+      /** @description True for a day before the window the person's plan shows. Its meals are kept; the day carries no count and no totals instead of reading as an empty day. */
+      hidden: boolean
+      meal_count: number | null
       nutrient_totals: components['schemas']['NutrientValue'][]
       applied_scope: components['schemas']['AppliedScope'] | null
     }
     NutritionDailySummaryPage: {
+      /**
+       * Format: date
+       * @description The first day the person's plan shows; null when nothing is hidden.
+       */
+      visible_from: string | null
       /** @description Days in a row with at least one meal, ending today or, while today has none yet, yesterday (ADR-040). Counted over every day, not only the range asked. */
       streak_days: number
       data: components['schemas']['NutritionDailySummary'][]
@@ -8798,6 +8962,76 @@ export interface components {
       /** @constant */
       method: 'GET'
     }
+    SpacePeriodComparison: {
+      /** @enum {string} */
+      period: 'week' | 'month'
+      /** @description Every programme with sessions in the window, whatever was asked for. */
+      programs: components['schemas']['SpacePeriodProgram'][]
+      periods: components['schemas']['SpacePeriod'][]
+      /** @description Each movement's best in its latest period, best first. */
+      movements: components['schemas']['SpacePeriodMovement'][]
+    }
+    SpacePeriod: {
+      /** Format: date */
+      starts_on: string
+      sessions: number
+      active_days: number
+      trained_seconds: number
+      work_sets: number
+      volume_kg: number | null
+      planned: number
+      fulfilled: number
+      /** @description How the period's work sets fall across the muscles, heaviest first. A set belongs to one muscle, the movement's primary, as in a routine's own count. */
+      muscles: components['schemas']['SpacePeriodMuscle'][]
+      /** @description Sessions trained with no plan behind them, whatever programme was asked for. */
+      unplanned: number
+      /** @description The days trained in the period and their volume, oldest first. */
+      days: components['schemas']['SpacePeriodDay'][]
+    }
+    SpacePeriodProgram: {
+      assignment_id: components['schemas']['Uuid']
+      title: string
+      from_gym: boolean
+      /** @description Planned sessions per period, oldest first. */
+      planned: number[]
+      /** @description Planned sessions kept per period, oldest first. */
+      fulfilled: number[]
+    }
+    SpacePeriodDay: {
+      /** Format: date */
+      trained_on: string
+      volume_kg: number | null
+    }
+    SpacePeriodMuscle: {
+      code: string
+      name: string
+      sets: number
+    }
+    SpacePeriodMovement: {
+      movement_id: components['schemas']['Uuid']
+      name: string
+      best_kg: number
+      previous_best_kg: number | null
+      change_kg: number | null
+      /** @description The movement's best in every period, oldest first; null where it was not trained. */
+      bests: (number | null)[]
+    }
+    BodyPhotoCreate: {
+      /** Format: date */
+      taken_on: string
+      photo: components['schemas']['NutritionPhotoUpload']
+    }
+    BodyPhoto: {
+      id: components['schemas']['UuidV7']
+      /** Format: date */
+      taken_on: string
+      /** Format: date-time */
+      created_at: string
+      photo: components['schemas']['SignedMediaUrl']
+    }
+    BodyPhotoPage: {
+      data: components['schemas']['BodyPhoto'][]
+    }
     Problem: {
       /** Format: uri */
       type: string
@@ -8809,6 +9043,8 @@ export interface components {
       request_id: string
       required_scope?: components['schemas']['RequiredScope'] | null
       errors?: components['schemas']['ValidationIssue'][]
+      /** @description Only on `plan-limit-reached`: the function of the plan catalogue that the person's plan does not open or whose limit was reached (DT-018). */
+      feature?: string
       /** @description Current server draft returned only for stale-draft conflicts. */
       current_state?:
         components['schemas']['SessionTemplateDraft'] | components['schemas']['ProgramDraft']
@@ -15360,6 +15596,39 @@ export interface operations {
       422: components['responses']['ValidationFailed']
     }
   }
+  duplicateMySessionTemplate: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        templateId: components['parameters']['TemplateId']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The new routine and its draft, never the one it was copied from */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SessionTemplate']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
+      409: components['responses']['Conflict']
+    }
+  }
   publishMySessionTemplate: {
     parameters: {
       query?: never
@@ -15930,6 +16199,36 @@ export interface operations {
       401: components['responses']['Unauthenticated']
       403: components['responses']['Forbidden']
       503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  compareMyPeriods: {
+    parameters: {
+      query: {
+        timezone: components['schemas']['IanaTimeZone']
+        period: 'week' | 'month'
+        count: number
+        /** @description One programme (its assignment id) or `free` for what was trained without a plan. Absent reads everything. `programs` lists every programme either way. */
+        program?: components['schemas']['Uuid'] | 'free'
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The periods, oldest first, and each movement's best against the period before */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SpacePeriodComparison']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
     }
   }
   getMyExecution: {
@@ -17944,6 +18243,93 @@ export interface operations {
       404: components['responses']['NotFound']
       409: components['responses']['Conflict']
       503: components['responses']['UpstreamUnavailable']
+    }
+  }
+  listMyBodyPhotos: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The person's photos */
+      200: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BodyPhotoPage']
+        }
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+    }
+  }
+  recordMyBodyPhoto: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['BodyPhotoCreate']
+      }
+    }
+    responses: {
+      /** @description The photo, kept */
+      201: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          'Idempotent-Replay': components['headers']['IdempotentReplay']
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BodyPhoto']
+        }
+      }
+      400: components['responses']['BadRequest']
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      422: components['responses']['ValidationFailed']
+    }
+  }
+  deleteMyBodyPhoto: {
+    parameters: {
+      query?: never
+      header: {
+        /** @description UUIDv4 reused only for HTTP retries of this operation. */
+        'Idempotency-Key': components['parameters']['IdempotencyKey']
+        /** @description UUIDv7 durable identity generated when the user intention is created. */
+        'Command-Id': components['parameters']['CommandId']
+      }
+      path: {
+        photoId: components['schemas']['Uuid']
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The photo is gone */
+      204: {
+        headers: {
+          'Cache-Control': components['headers']['NoStore']
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      401: components['responses']['Unauthenticated']
+      403: components['responses']['Forbidden']
+      404: components['responses']['NotFound']
     }
   }
   listSpaceHealthContext: {

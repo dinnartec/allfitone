@@ -18,6 +18,7 @@ export { spaceClientInvitationRoutes } from './handlers/space-client-invitations
 export { spaceIdentityRoutes } from './handlers/space.js'
 export { spaceOnboardingRoutes } from './handlers/space-onboarding.js'
 export { spaceBodyProgressRoutes } from './handlers/space-body-progress.js'
+export { spaceBodyPhotoRoutes } from './handlers/space-body-photos.js'
 export { spaceHealthContextRoutes } from './handlers/space-health-context.js'
 export { workosWebhookRoutes } from './handlers/webhooks.js'
 export { backofficeIdentityRoutes, BACKOFFICE_SESSION_COOKIE } from './handlers/backoffice.js'

@@ -257,6 +257,8 @@ const catalogueProgram: ProgramSummary = {
   levels: ['some_practice', 'experienced'],
   emphases: ['back', 'chest', 'legs'],
   cover_url: 'https://media.test/catalog/programs/p6/male/abc.webp',
+  locked: false,
+  unlock_feature: null,
 }
 
 const catalogue: ProgramCatalogue = {
@@ -306,6 +308,7 @@ function harness(overrides?: {
     discardMyProgram: async () => program,
     removeMyProgram: async () => removedProgram,
     duplicateMyProgram: async () => duplicatedProgram,
+    duplicateMySessionTemplate: async () => template,
     readMyUnpublishedProgram: async () => program,
     createMyProgram: async () => program,
     replaceMyProgramDraft: async () => programDraft,
@@ -374,7 +377,7 @@ describe('the Space planning surface honours the contract', () => {
         operation.path.startsWith('/space/v1/week-plan') ||
         operation.path.startsWith('/space/v1/session-templates'),
     )
-    expect(declared).toHaveLength(20)
+    expect(declared).toHaveLength(21)
     expect(declared.map((operation) => operation.allfitOperation).sort()).toEqual([
       'OP-PLN-001',
       'OP-PLN-002',
@@ -411,6 +414,8 @@ describe('the Space planning surface honours the contract', () => {
       // Y copiarlo, que además es la única salida para un programa tomado de Allfit:
       // no tiene borrador y no se puede editar, y la copia sí.
       'OP-PLN-035',
+      // Duplicating one's own routine, which Pro opens.
+      'OP-PLN-036',
     ])
   })
 })
@@ -1581,5 +1586,71 @@ describe('PUT /space/v1/programs/{programId}/cover', () => {
     })
 
     expect(response.status).toBe(401)
+  })
+})
+
+describe('POST /space/v1/session-templates/{templateId}/duplicate', () => {
+  test('T-PLN-API-173 answers the new routine, as the contract describes it', async () => {
+    let asked = ''
+    const watching = harness({
+      service: {
+        duplicateMySessionTemplate: async (input) => {
+          asked = input.templateId
+          return template
+        },
+      },
+    })
+    const response = await watching.request(
+      `/space/v1/session-templates/${TEMPLATE_ID}/duplicate`,
+      {
+        method: 'POST',
+        headers: commanded,
+      },
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(asked).toBe(TEMPLATE_ID)
+    assertMatchesContract('SessionTemplate', await response.json())
+  })
+
+  test('T-PLN-API-174 a plan without duplication says which function it lacks', async () => {
+    const refused = harness({
+      service: {
+        duplicateMySessionTemplate: async () => {
+          throw Object.assign(new Error('this function comes with Pro'), {
+            code: 'AF402',
+            detail: 'routine_duplication',
+          })
+        },
+      },
+    })
+    const response = await refused.request(`/space/v1/session-templates/${TEMPLATE_ID}/duplicate`, {
+      method: 'POST',
+      headers: commanded,
+    })
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({
+      type: 'https://errors.allfit.invalid/plan-limit-reached',
+      feature: 'routine_duplication',
+    })
+  })
+
+  test('T-PLN-API-175 refuses an identifier that is not a UUIDv7, and needs the command headers', async () => {
+    const bad = await harness().request('/space/v1/session-templates/not-a-uuid/duplicate', {
+      method: 'POST',
+      headers: commanded,
+    })
+    const uncommanded = await harness().request(
+      `/space/v1/session-templates/${TEMPLATE_ID}/duplicate`,
+      {
+        method: 'POST',
+        headers: authorized,
+      },
+    )
+
+    expect(bad.status).toBe(400)
+    expect(uncommanded.status).toBe(400)
   })
 })

@@ -85,17 +85,28 @@ describe('what the screens say', () => {
       enabled,
       limit_value: limit,
     })
-    expect(featureSentence(f('active_programs', 1))).toBe('Máximo 1 programa activo')
-    expect(featureSentence(f('active_programs', null))).toBe('Programas activos sin límite')
-    expect(featureSentence(f('own_routines', 4))).toBe('Máximo 4 rutinas')
-    expect(featureSentence(f('history_months', 3))).toBe('Historial de los últimos 3 meses')
-    expect(featureSentence(f('history_months', 1))).toBe('Historial del último mes')
-    expect(featureSentence(f('history_months', null))).toBe('Todo tu historial')
-    expect(featureSentence(f('meal_photos', null, false))).toBe(
-      'Comidas solo por búsqueda de alimentos',
+    expect(featureSentence(f('active_personal_programs', 1))).toBe(
+      'Máximo 1 programa propio activo',
     )
-    expect(featureSentence(f('meal_photos', null))).toBe('Comidas por foto y por búsqueda')
+    expect(featureSentence(f('active_personal_programs', null))).toBe(
+      'Programas propios sin límite',
+    )
+    expect(featureSentence(f('own_routines', 3))).toBe('Máximo 3 rutinas propias')
+    expect(featureSentence(f('training_history_months', 1))).toBe('Historial del último mes')
+    expect(featureSentence(f('training_history_months', 3))).toBe(
+      'Historial de los últimos 3 meses',
+    )
+    expect(featureSentence(f('training_history_months', null))).toBe('Todo tu historial')
+    expect(featureSentence(f('meal_photo_recognition', null, false))).toBe(
+      'Comidas por búsqueda de alimentos',
+    )
+    expect(featureSentence(f('meal_photo_recognition', null))).toBe('Comidas por foto con IA')
     expect(featureSentence(f('something_new', 2))).toBe('Función: máximo 2')
+    // What a plan leaves out is not listed as if it were included: it says nothing.
+    expect(featureSentence(f('body_photos', null, false))).toBeUndefined()
+    expect(featureSentence(f('routine_duplication', null, false))).toBeUndefined()
+    expect(featureSentence(f('something_new', null, false))).toBeUndefined()
+    expect(featureSentence(f('body_measurements', null, false))).toBe('Peso y estatura')
     expect(featureIcon('own_routines')).toBe('checklist')
     expect(featureIcon('something_new')).toBe('check')
   })

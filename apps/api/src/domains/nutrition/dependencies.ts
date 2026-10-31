@@ -5,7 +5,7 @@ import { createObjectStoreFromEnv } from '@allfitone/object-store'
 
 import { createSpaceNutritionService, type SpaceNutritionService } from './application/index.js'
 import { createNutritionDatabase } from './infrastructure/index.js'
-import { createSharpSanitizer } from './infrastructure/photo.js'
+import { createSharpSanitizer } from '../../platform/media/photo.js'
 
 let cached: SpaceNutritionService | undefined
 

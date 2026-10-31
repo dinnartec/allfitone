@@ -1,17 +1,19 @@
 /**
- * `PRO-B` · Allfit Pro — `HU-SP-084`, `HU-SP-085`.
+ * `PRO-E` · Gratis y Pro — `HU-SP-084`, `HU-SP-085`.
  *
- * The one place inside the app where Pro is bought, and the only way to pay is the
- * phone's own store. The photograph and the headline sell the idea; the price is the
- * store's, localized for the person, and it is the one that stays frozen while they
- * remain subscribed. The benefits are things that are true today, not functions product
- * has not decided yet.
+ * The one place inside the app where Pro is bought, and where the two plans are put side
+ * by side. Everything it says about a plan comes from the catalogue (`GET /pro/plans`):
+ * the cards tell what Pro opens and the table reads each plan's declared functions, so
+ * changing a limit in Backoffice changes this screen without a release. The price is the
+ * store's, localized, and it stays frozen while the person remains subscribed.
  *
- * **`PRO-B2`.** Whoever already has Pro through a gym is told so where the price is, and
- * the button does not offer to charge them (`HU-SP-085` criterion 6): they already have
- * Pro, and a second charge would buy nothing. If that relationship ends, they can buy it.
+ * **`PRO-E3`.** Whoever already has Pro through a gym is told so and the button does not
+ * charge them (`HU-SP-085` criterion 6); whoever already pays sees it as theirs. The
+ * renewal, «Restaurar compras», the terms and the privacy policy are always under the
+ * button, as the stores ask of a subscription.
  */
 
+import { Badge } from '@allfitone/react-native/badge'
 import { Button } from '@allfitone/react-native/button'
 import { FoundationIcon } from '@allfitone/react-native/icons'
 import { IconButton } from '@allfitone/react-native/icon-button'
@@ -20,47 +22,52 @@ import { Scrim } from '@allfitone/react-native/gradient'
 import { Screen } from '@allfitone/react-native/screen'
 import { Text } from '@allfitone/react-native/text'
 import { useTheme } from '@allfitone/react-native/theme'
-import type { IconName } from '@allfitone/icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useCallback, useMemo, useState } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
+import {
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from 'react-native'
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import heroPhoto from '../../assets/images/pro-hero.webp'
+import hero from '../../assets/images/plans/compare-hero.webp'
+import cover0 from '../../assets/images/plans/cover-0.webp'
+import cover1 from '../../assets/images/plans/cover-1.webp'
+import cover2 from '../../assets/images/plans/cover-2.webp'
+import cover3 from '../../assets/images/plans/cover-3.webp'
+import meal from '../../assets/images/plans/meal-scan.webp'
+import { comparisonRows } from '../../src/client/plan'
 import {
+  freePlanOf,
   gymsOf,
   productFor,
   proPlanOf,
-  storeName,
   subscriptionOf,
   type ProFlow,
+  type ProPlanCatalogue,
   type ProStatus,
 } from '../../src/client/pro'
 import { deviceStore, loadOffer, type StoreOffer } from '../../src/client/pro-store'
 import { createSpaceProFlow } from '../../src/client/pro-transport'
+import { ComparisonTable, UnlockCarousel } from '../../src/components/plan-comparison'
 import { useProPurchase } from '../../src/components/use-pro-purchase'
 
 const UNAVAILABLE = 'No pudimos cargar los planes. Revisa tu conexión e inténtalo de nuevo.'
 const NOT_ON_SALE = 'Pro todavía no está a la venta en esta tienda.'
-const PERIOD: Record<string, string> = { month: 'al mes', year: 'al año' }
 const PER: Record<string, string> = { month: '/mes', year: '/año' }
-const HERO_HEIGHT = 372
-const FOOTER_HEIGHT = 150
-
-const BENEFITS: readonly (readonly [IconName, string, string])[] = [
-  ['training', 'Sin depender de un gimnasio', 'Pro es tuyo, entrenes donde entrenes.'],
-  [
-    'progress',
-    'Más profundidad y volumen',
-    'Programas y rutinas sin límite, comidas por foto y todo tu historial.',
-  ],
-  [
-    'permissions',
-    'Tus datos, siempre gratis',
-    'Decidir qué compartes, verlo, descargarlo y borrarlo no se cobra.',
-  ],
-]
+const RENEWS: Record<string, string> = { month: 'cada mes', year: 'cada año' }
+const STORE: Record<string, string> = { app_store: 'la App Store', google_play: 'Google Play' }
+const SITE = 'https://space.allfit.one/es'
+const HERO_HEIGHT = 430
+const FOOTER_HEIGHT = 176
+const COVERS = [cover0, cover1, cover2, cover3]
 
 export default function ProPlansRoute() {
   const flow = useMemo(() => createSpaceProFlow(), [])
@@ -80,7 +87,7 @@ export function ProPlans({
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const [status, setStatus] = useState<ProStatus | undefined>(undefined)
-  const [period, setPeriod] = useState<string | null>(null)
+  const [catalogue, setCatalogue] = useState<ProPlanCatalogue | undefined>(undefined)
   const [offer, setOffer] = useState<StoreOffer | undefined>(undefined)
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const purchase = useProPurchase(flow, () => router.replace('/pro'))
@@ -92,8 +99,8 @@ export function ProPlans({
         .then(async ([read, plans]) => {
           if (!active) return
           setStatus(read)
+          setCatalogue(plans)
           const pro = proPlanOf(plans)
-          setPeriod(pro?.billing_period ?? null)
           const product = pro ? productFor(pro, deviceStore) : undefined
           const found = product ? await offerFor(product).catch(() => undefined) : undefined
           if (!active) return
@@ -107,149 +114,133 @@ export function ProPlans({
     }, [flow, offerFor]),
   )
 
+  const pro = catalogue ? proPlanOf(catalogue) : undefined
+  const free = catalogue ? freePlanOf(catalogue) : undefined
+  const rows = comparisonRows(free?.features ?? [], pro?.features ?? [])
+  const period = pro?.billing_period ?? null
   const paying = status ? subscriptionOf(status) : undefined
   const [gym] = status && status.effective_source === 'organization' ? gymsOf(status) : []
   const canBuy = Boolean(offer && status && !paying && !gym)
   const canvas = theme.color.background.canvas
   const label = paying
-    ? 'Ya pagas Pro'
+    ? 'Ya eres Pro · Gestionar'
     : gym
-      ? 'Ya tienes Pro por tu gimnasio'
+      ? `Ya tienes Pro con ${gym.organization_name}`
       : offer
-        ? `Suscribirme por ${offer.displayPrice}${period ? PER[period] : ''}`
-        : `Suscribirme con ${storeName(deviceStore)}`
+        ? `Hazte Pro · ${offer.displayPrice}${period ? (PER[period] ?? '') : ''}`
+        : 'Hazte Pro'
+  const note = paying
+    ? 'Tu plan se renueva solo. Lo cancelas cuando quieras desde la tienda.'
+    : gym
+      ? 'Mientras sigas con ellos no pagas nada más. Si terminas con el gimnasio, aquí podrás suscribirte.'
+      : `Se renueva ${period ? (RENEWS[period] ?? '') : ''} hasta que lo canceles en ${STORE[deviceStore] ?? 'la tienda'}.`
 
   return (
     <Screen edges={[]} padded={false} ambient={false}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom + 12 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.hero, { height: HERO_HEIGHT + insets.top }]}>
           <Image
-            source={heroPhoto}
+            source={hero}
             style={[styles.photo, { width, height: HERO_HEIGHT + insets.top }]}
             resizeMode="cover"
             accessible={false}
           />
-          <Scrim height={HERO_HEIGHT + insets.top} coverage={1} onset={0.3} />
+          <Scrim height={HERO_HEIGHT + insets.top} coverage={1} onset={0.25} />
           <View style={styles.heroCopy}>
-            <View
-              style={[
-                styles.seal,
-                {
-                  backgroundColor: theme.color.accent.tonal,
-                  borderColor: theme.color.accent.tonalBorder,
-                },
-              ]}
-            >
-              <FoundationIcon
-                name="favourite"
-                size="sm"
-                color={theme.color.icon.accent}
-                decorative
-              />
-              <Text role="control" size="xs" color="accent">
-                Allfit Pro
-              </Text>
+            {/* Solid, not tonal: a tonal seal disappears into the photo behind it. */}
+            <Badge label="Gratis y Pro" tone="accent" style={styles.seal} />
+            <View accessible accessibilityRole="header" accessibilityLabel="Tu progreso, sin techo">
+              {(['TU PROGRESO,', 'SIN', 'TECHO.'] as const).map((line, index) => (
+                <Animated.View
+                  key={line}
+                  entering={FadeInDown.delay(120 + index * 120)
+                    .duration(520)
+                    .reduceMotion(ReduceMotion.System)}
+                >
+                  <Text
+                    role="display"
+                    size="6xl"
+                    color={index === 2 ? 'accent' : index === 1 ? 'muted' : 'primary'}
+                    style={styles.title}
+                  >
+                    {line}
+                  </Text>
+                </Animated.View>
+              ))}
             </View>
-            <Text role="display" size="5xl" uppercase accessibilityRole="header">
-              {'Entrena sin\ndepender de nadie'}
-            </Text>
-            <Text role="body" size="sm" color="secondary">
-              Todo Allfit, con o sin gimnasio. Tus datos siguen siendo tuyos en cualquier plan.
+            <Text role="body" size="md" color="secondary">
+              Entrenar es gratis, siempre. Pro abre tu historial completo, el análisis de tu
+              progreso y la nutrición con IA.
             </Text>
           </View>
         </View>
 
-        <View style={styles.body}>
-          {failure ? (
+        {failure ? (
+          <View style={styles.padded}>
             <InlineAlert message={failure} tone={failure === NOT_ON_SALE ? 'info' : 'danger'} />
-          ) : null}
-          {purchase.failure ? <InlineAlert message={purchase.failure} /> : null}
+          </View>
+        ) : null}
+        {purchase.failure ? (
+          <View style={styles.padded}>
+            <InlineAlert message={purchase.failure} />
+          </View>
+        ) : null}
 
-          {gym ? (
+        <UnlockCarousel plan="pro" meal={meal} covers={COVERS} />
+
+        <View style={[styles.padded, styles.sections]}>
+          {catalogue ? <ComparisonTable rows={rows} selected="pro" /> : null}
+
+          <View
+            style={[
+              styles.free,
+              {
+                borderColor: `${theme.color.status.success}40`,
+                backgroundColor: `${theme.color.status.success}12`,
+              },
+            ]}
+          >
+            <FoundationIcon
+              name="permissions"
+              size="md"
+              color={theme.color.status.success}
+              decorative
+            />
+            <View style={styles.grow}>
+              <Text role="control" size="sm" color="success">
+                Tus datos nunca se cobran
+              </Text>
+              <Text role="body" size="sm" color="secondary">
+                Decidir qué compartes, verlo, descargarlo y borrarlo es gratis en los dos planes. Si
+                bajas a Gratis no pierdes nada: solo dejas de verlo.
+              </Text>
+            </View>
+          </View>
+
+          {gym ? null : (
             <View
               style={[
-                styles.gymNotice,
+                styles.gym,
                 {
-                  backgroundColor: theme.color.accent.tonal,
-                  borderColor: theme.color.accent.tonalBorder,
+                  borderColor: theme.color.border.subtle,
+                  backgroundColor: theme.color.background.surface,
                 },
               ]}
             >
-              <View
-                style={[styles.monogram, { backgroundColor: theme.color.discipline.highIntensity }]}
-              >
-                <Text role="data" size="lg" style={{ color: theme.color.background.canvas }}>
-                  {gym.organization_name.slice(0, 1).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.grow}>
-                <Text role="control" size="sm">
-                  Ya tienes Pro por {gym.organization_name}
-                </Text>
-                <Text role="body" size="xs" color="secondary">
-                  Pagarlo solo te sirve para no depender de esa afiliación.
-                </Text>
-              </View>
+              <FoundationIcon
+                name="organization"
+                size="md"
+                color={theme.color.icon.accent}
+                decorative
+              />
+              <Text role="body" size="sm" color="secondary" style={styles.grow}>
+                ¿Tu gimnasio usa Allfit? Pro te sale incluido mientras sigas con ellos.
+              </Text>
             </View>
-          ) : null}
-
-          {offer ? (
-            <View style={styles.price}>
-              <View style={styles.priceRow}>
-                <Text role="data" size="6xl">
-                  {offer.displayPrice}
-                </Text>
-                <Text role="body" size="md" color="secondary">
-                  {period ? PERIOD[period] : ''}
-                </Text>
-              </View>
-              <View style={styles.inline}>
-                <FoundationIcon
-                  name="locked"
-                  size="xs"
-                  color={theme.color.icon.accent}
-                  decorative
-                />
-                <Text role="control" size="xs" color="accent">
-                  Tu precio no sube mientras sigas suscrito
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          <View style={styles.benefits}>
-            {BENEFITS.map(([icon, title, detail]) => (
-              <View key={title} style={styles.benefit}>
-                <View
-                  style={[
-                    styles.glyph,
-                    {
-                      backgroundColor: theme.color.accent.tonal,
-                      borderColor: theme.color.accent.tonalBorder,
-                    },
-                  ]}
-                >
-                  <FoundationIcon
-                    name={icon}
-                    size="md"
-                    color={theme.color.icon.accent}
-                    decorative
-                  />
-                </View>
-                <View style={styles.grow}>
-                  <Text role="control" size="md">
-                    {title}
-                  </Text>
-                  <Text role="body" size="xs" color="secondary">
-                    {detail}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
+          )}
         </View>
       </ScrollView>
 
@@ -263,17 +254,24 @@ export function ProPlans({
       <View style={[styles.footer, { paddingBottom: insets.bottom + 14 }]}>
         <LinearGradient
           colors={[`${canvas}00`, canvas]}
-          locations={[0, 0.28]}
+          locations={[0, 0.22]}
           style={StyleSheet.absoluteFill}
         />
         <Button
           label={label}
           loading={purchase.busy}
-          disabled={!canBuy}
+          disabled={!canBuy && !paying}
           onPress={() => {
+            if (paying) {
+              router.replace('/pro')
+              return
+            }
             if (offer && status && canBuy) void purchase.subscribe(offer, status.account_token)
           }}
         />
+        <Text role="body" size="xs" color="muted" align="center">
+          {note}
+        </Text>
         <View style={styles.links}>
           <Pressable
             accessibilityRole="button"
@@ -284,12 +282,19 @@ export function ProPlans({
               Restaurar compras
             </Text>
           </Pressable>
-          <Text role="body" size="xs" color="muted">
-            ·
-          </Text>
-          <Text role="body" size="xs" color="muted">
-            Cancela cuando quieras
-          </Text>
+          <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(`${SITE}/terms`)}>
+            <Text role="control" size="xs">
+              Términos
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL(`${SITE}/privacy`)}
+          >
+            <Text role="control" size="xs">
+              Privacidad
+            </Text>
+          </Pressable>
         </View>
       </View>
     </Screen>
@@ -299,47 +304,27 @@ export function ProPlans({
 const styles = StyleSheet.create({
   hero: { justifyContent: 'flex-end' },
   photo: { position: 'absolute', top: 0, left: 0 },
-  heroCopy: { paddingHorizontal: 24, paddingBottom: 22, gap: 10 },
-  seal: {
-    alignSelf: 'flex-start',
+  heroCopy: { paddingHorizontal: 24, paddingBottom: 20, gap: 12 },
+  title: { lineHeight: 52 },
+  seal: { alignSelf: 'flex-start' },
+  padded: { paddingHorizontal: 24, marginBottom: 20 },
+  sections: { gap: 22, marginTop: 30, marginBottom: 0 },
+  free: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
+    gap: 12,
+    borderRadius: 20,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    padding: 16,
   },
-  body: { paddingHorizontal: 24, gap: 22 },
-  gymNotice: {
+  gym: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 14,
+    padding: 16,
   },
-  monogram: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  price: { gap: 6 },
-  priceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  inline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  benefits: { gap: 16 },
-  benefit: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  glyph: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  grow: { flex: 1, gap: 2 },
+  grow: { flex: 1, gap: 4 },
   close: { position: 'absolute', left: 24 },
   footer: {
     position: 'absolute',
@@ -347,8 +332,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 24,
-    paddingTop: 22,
-    gap: 12,
+    paddingTop: 24,
+    gap: 10,
   },
-  links: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 14 },
+  links: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 18 },
 })

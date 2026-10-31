@@ -166,6 +166,11 @@ export function createNutritionDatabase(): NutritionDatabase {
         return row?.foods ?? []
       }),
 
+    requireRecognition: (input) =>
+      transact(sql, input.personId, input.requestId, async (transaction) => {
+        await transaction`select nutrition.require_recognition(${input.personId}::uuid)`
+      }),
+
     readConsent: (input) =>
       transact(sql, input.personId, input.requestId, async (transaction) => {
         const [row] = await transaction<{ consent: ConsentRow | null }[]>`

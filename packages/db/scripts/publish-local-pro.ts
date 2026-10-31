@@ -14,10 +14,9 @@
  *
  * The product ids match the StoreKit configuration file of the Space app.
  *
- * It also adds a handful of **invented** functions, so the screens have limits to show
- * while product decides the real catalogue. They exist only on this machine: in every
- * real environment a function enters the catalogue by migration, with the code that
- * enforces it.
+ * It then writes what each plan declares for every function of the catalogue, with the
+ * values product decided for Gratis and Pro (TECH-31). The functions themselves come
+ * from the migrations, like everywhere else; only the declarations are written here.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -39,30 +38,41 @@ const GUARDED = [
   'payments.platform_plan_features',
 ] as const
 
-// Code and name; then each plan's limit (null is unlimited), or false when it is left out.
-const DEMO_FEATURES: readonly [string, string, number | null | false, number | null | false][] = [
-  ['active_programs', 'Programas activos', 1, null],
-  ['own_routines', 'Rutinas propias', 4, null],
-  ['history_months', 'Historial', 3, null],
-  ['meal_photos', 'Comidas por foto', false, null],
+// Each plan's declaration per function: a limit (null is unlimited), or false when the
+// plan does not open it. Pro opens everything without limit.
+const FREE_PLAN: Readonly<Record<string, number | null | false>> = {
+  training_history_months: 1,
+  nutrition_history_months: 1,
+  active_personal_programs: 1,
+  own_routines: 3,
+  routine_duplication: false,
+  full_program_catalogue: false,
+  period_analysis: false,
+  body_measurements: false,
+  body_photos: false,
+  meal_photo_recognition: false,
+}
+// Functions this script used to invent before the catalogue existed.
+const RETIRED = [
+  'meal_photos_per_day',
+  'compared_history_weeks',
+  'active_programs',
+  'history_months',
+  'meal_photos',
 ]
-// Demo functions this script used to add, removed so a local catalogue matches the list above.
-const RETIRED = ['meal_photos_per_day', 'compared_history_weeks']
 
-async function demoFeatures(): Promise<string> {
+async function declareFeatures(): Promise<string> {
   return sql.begin(async (transaction) => {
     await transaction`set local role allfit_owner`
     await transaction`alter table payments.platform_plan_features disable trigger user`
     await transaction`delete from payments.platform_plan_features where feature_code in ${sql(RETIRED)}`
     await transaction`delete from payments.platform_features where code in ${sql(RETIRED)}`
-    for (const [code, name, free, pro] of DEMO_FEATURES) {
-      await transaction`
-        insert into payments.platform_features (code, name, unit) values (${code}, ${name}, null)
-        on conflict (code) do nothing
-      `
+    const codes = await transaction<{ code: string }[]>`select code from payments.platform_features`
+    for (const { code } of codes) {
+      const free = FREE_PLAN[code] ?? null
       for (const [kind, limit] of [
         ['free', free],
-        ['paid', pro],
+        ['paid', null],
       ] as const) {
         await transaction`
           insert into payments.platform_plan_features (platform_plan_version_id, feature_code, limit_value, enabled)
@@ -76,7 +86,7 @@ async function demoFeatures(): Promise<string> {
       }
     }
     await transaction`alter table payments.platform_plan_features enable trigger user`
-    return `Demo functions in place: ${DEMO_FEATURES.map(([code]) => code).join(', ')}.`
+    return `Gratis and Pro declare all ${String(codes.length)} functions of the catalogue.`
   })
 }
 
@@ -175,7 +185,7 @@ async function publish(): Promise<string> {
 
 try {
   console.log(await publish())
-  console.log(await demoFeatures())
+  console.log(await declareFeatures())
 } finally {
   await sql.end({ timeout: 1 })
 }

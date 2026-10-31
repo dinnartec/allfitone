@@ -72,6 +72,8 @@ import { sendMealPhoto } from '../../src/client/meal-photos'
 import { ConsentSheet, FoodTile, MealMenu } from '../../src/components/capture-sheets'
 import { FIGURE_TRACKING, macroColor, MEAL_ICON } from '../../src/components/nutrition-ui'
 import { preparePhoto } from '../../src/components/prepare-photo'
+import { usePlan, useUpgradeSheet } from '../../src/components/upgrade-sheet'
+import { opens } from '../../src/client/plan'
 
 type Tab = 'photo' | 'foods'
 type Phase = 'camera' | 'recognizing' | 'review'
@@ -130,7 +132,14 @@ export default function CaptureScreen() {
     MEAL_TYPES.find((one) => one === type) ?? suggested,
   )
   const [tab, setTab] = useState<Tab>('photo')
+  const features = usePlan()
+  const upgrade = useUpgradeSheet(features)
+  const photoOpen = opens(features, 'meal_photo_recognition')
   const [phase, setPhase] = useState<Phase>('camera')
+  // On a plan without recognition the screen opens on the search, never on a camera it refuses.
+  useEffect(() => {
+    if (!photoOpen && tab === 'photo' && phase === 'camera') setTab('foods')
+  }, [photoOpen, tab, phase])
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [items, setItems] = useState<CaptureItem[]>([])
   const [recognizedBy, setRecognizedBy] = useState<string | null>(null)
@@ -216,11 +225,11 @@ export default function CaptureScreen() {
         ...fromRecognition(recognition),
       ])
       setPhase('review')
-    } catch {
+    } catch (cause: unknown) {
       if (mine !== attempt.current) return
-      setFailure(RECOGNITION_FAILED)
       setPhase('camera')
       setTab('foods')
+      if (!upgrade.handled(cause)) setFailure(RECOGNITION_FAILED)
     }
   }
 
@@ -531,6 +540,11 @@ export default function CaptureScreen() {
                   accessibilityState={{ selected: active }}
                   onPress={() => {
                     void Haptics.selectionAsync()
+                    // The photo is Pro; searching for foods stays free and opens instead.
+                    if (key === 'photo' && !photoOpen) {
+                      upgrade.offer('meal_photo_recognition')
+                      return
+                    }
                     setTab(key)
                   }}
                   style={styles.tab}
@@ -542,7 +556,7 @@ export default function CaptureScreen() {
                       color: active ? theme.color.status.warning : theme.color.text.secondary,
                     }}
                   >
-                    {label}
+                    {key === 'photo' && !photoOpen ? `${label} · Pro` : label}
                   </Text>
                   <View
                     style={[
@@ -589,6 +603,7 @@ export default function CaptureScreen() {
           setTab('foods')
         }}
       />
+      {upgrade.sheet}
     </View>
   )
 }

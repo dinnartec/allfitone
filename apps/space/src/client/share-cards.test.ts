@@ -14,7 +14,10 @@ import {
   recordJump,
   restoreLabel,
   routineTitle,
+  recordGain,
   shortDay,
+  stickersFor,
+  minutesLine,
   storyRoute,
   streakSteps,
   weekStartLabel,
@@ -111,16 +114,22 @@ describe('which cards a finished session shares (ADR-036)', () => {
       'muscles',
       'number',
       'plain',
+      'total',
+      'time',
+      'records',
+      'sets',
     ])
   })
 
   test('T-SPC-UNIT-152 no record is no record card, and a streak of one week is no streak', () => {
-    expect(cardsFor({ ...summary, records: [], streak_weeks: 1 })).toEqual([
+    expect(cardsFor({ ...summary, records: [], streak_weeks: 1, total_volume_kg: null })).toEqual([
       'photo',
       'session',
       'muscles',
       'number',
       'plain',
+      'time',
+      'sets',
     ])
   })
 })
@@ -284,5 +293,42 @@ describe('the streak as steps', () => {
     // 17:00 UTC on Tuesday the 29th is noon in Bogotá: that week began Monday the 28th.
     expect(weekStartLabel(summary, 'America/Bogota', 0)).toBe('EL 28 DE SEPTIEMBRE')
     expect(weekStartLabel(summary, 'America/Bogota', 7)).toBe('EL 10 DE AGOSTO')
+  })
+})
+
+describe('the minimal cards and the stickers', () => {
+  test('T-SPC-UNIT-176 a sticker with nothing true to say does not appear', () => {
+    expect(stickersFor(summary)).toEqual([
+      'figures',
+      'record',
+      'streak',
+      'strip',
+      'muscles',
+      'number',
+    ])
+    expect(stickersFor({ ...summary, records: [], streak_weeks: 1 })).toEqual([
+      'figures',
+      'strip',
+      'muscles',
+      'number',
+    ])
+  })
+
+  test('T-SPC-UNIT-177 a record reads as the gain and what it means', () => {
+    const [estimated, heaviest] = summary.records
+    expect(heaviest && recordGain(heaviest)).toEqual({
+      gain: '+2,5 KG',
+      meaning: 'MÁS PESO QUE NUNCA',
+    })
+    expect(estimated && recordGain(estimated)).toEqual({
+      gain: '+4 KG',
+      meaning: 'TU MEJOR 1RM ESTIMADO',
+    })
+  })
+
+  test('T-SPC-UNIT-178 the time reads in minutes, in hours past one', () => {
+    expect(minutesLine(1565)).toBe('EN 26 MINUTOS')
+    expect(minutesLine(45)).toBe('EN 1 MINUTO')
+    expect(minutesLine(3900)).toBe('EN 1 H 05')
   })
 })
