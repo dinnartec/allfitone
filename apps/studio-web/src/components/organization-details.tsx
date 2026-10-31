@@ -38,6 +38,7 @@ import Link from 'next/link'
 import { organizationTypeLabel } from './membership-selector'
 import { useOrganizationContext } from './organization-context'
 import { partitionSites, siteStatusLabel } from '@/lib/organization-details'
+import { canManageOrganization } from '@/lib/organization-profile'
 import { canManageSites } from '@/lib/organization-sites'
 import type { OrganizationSite } from '@/lib/studio-api'
 import {
@@ -61,6 +62,12 @@ export function OrganizationDetails() {
   if (!organization) return <FailureState onRetry={() => void query.refetch()} />
 
   const sites = partitionSites(organization.sites)
+  // Offered only to a role the server would accept, for the same reason the
+  // sites panel gates its own action: a click that can only be refused costs
+  // the person a trip and teaches them nothing.
+  const editPath = canManageOrganization(current.roles, rolesQuery.data?.items)
+    ? `/organizations/${current.organization_id}/organization/edit`
+    : null
 
   return (
     <div data-organization-details>
@@ -80,10 +87,21 @@ export function OrganizationDetails() {
           <CardDescription>
             Así identifica Allfit a tu organización. Esta vista no cambia roles ni permisos.
           </CardDescription>
-          <CardAction>
+          <CardAction data-organization-identity-action>
             <Badge variant={organization.status === 'active' ? 'success' : 'secondary'}>
               {organization.status === 'active' ? 'Activa' : 'Cerrada'}
             </Badge>
+            {editPath ? (
+              <Link
+                href={editPath}
+                data-organization-edit
+                data-slot="button"
+                data-variant="outline"
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                Editar datos
+              </Link>
+            ) : null}
           </CardAction>
         </CardHeader>
         <CardContent>

@@ -18,6 +18,18 @@ describe('organization workspace navigation', () => {
     })
   })
 
+  /*
+   * Without its own case this route fell through to the "Studio" fallback, so
+   * the screen had a heading that named the product instead of the page. One
+   * h1 was there, which is why the sweep passed; it just did not say where you
+   * were.
+   */
+  test('resolves the organization edit title rather than the fallback', () => {
+    expect(resolveWorkspaceRoute(`${basePath}/organization/edit`, organizationId)).toEqual({
+      title: 'Editar datos',
+    })
+  })
+
   test('resolves the new site title', () => {
     expect(resolveWorkspaceRoute(`${basePath}/organization/sites/new`, organizationId)).toEqual({
       title: 'Nueva sede',

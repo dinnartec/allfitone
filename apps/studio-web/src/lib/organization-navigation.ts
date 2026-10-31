@@ -16,6 +16,11 @@ export function resolveWorkspaceRoute(
   if (pathname === `${basePath}/organization`) {
     return { title: 'Organización' }
   }
+  // "Datos" is the word the card on the section above already uses, and the
+  // button that leads here says "Editar datos".
+  if (pathname === `${basePath}/organization/edit`) {
+    return { title: 'Editar datos' }
+  }
   if (pathname === `${basePath}/organization/sites/new`) {
     return { title: 'Nueva sede' }
   }
