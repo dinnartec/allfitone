@@ -151,41 +151,16 @@ export function ClientDirectoryList() {
             : 'Consulta las personas que atiendes y las invitaciones que enviaste.'
         }
         actions={
-          <>
-            {/* La referencia de categorías no depende del catálogo publicado ni
-                de poder invitar: un coach que solo atiende clientes también
-                necesita saber qué puede consultar de ellos. */}
+          canInvite ? (
             <Link
-              href={`/organizations/${current.organization_id}/clients/information-categories`}
+              href={`/organizations/${current.organization_id}/clients/invitations/new`}
               data-slot="button"
-              data-variant="outline"
-              className={buttonVariants({ variant: 'outline' })}
+              data-variant="default"
+              className={buttonVariants()}
             >
-              Categorías de información
+              Invitar cliente
             </Link>
-            {/* La pareja de la anterior: una dice qué se puede pedir y la otra
-                qué concedió cada quien. Vive aquí y no en el menú lateral
-                porque se consulta mirando a los clientes, no como sección
-                propia. */}
-            <Link
-              href={`/organizations/${current.organization_id}/clients/authorizations`}
-              data-slot="button"
-              data-variant="outline"
-              className={buttonVariants({ variant: 'outline' })}
-            >
-              Autorizaciones
-            </Link>
-            {canInvite ? (
-              <Link
-                href={`/organizations/${current.organization_id}/clients/invitations/new`}
-                data-slot="button"
-                data-variant="default"
-                className={buttonVariants()}
-              >
-                Invitar cliente
-              </Link>
-            ) : null}
-          </>
+          ) : undefined
         }
       />
 
@@ -297,6 +272,41 @@ export function ClientDirectoryList() {
           </Button>
         </div>
       ) : null}
+
+      {/*
+       * Two consultations about what the directory lists, not actions taken
+       * from it: one says what may be asked of a client, the other what each
+       * person granted.
+       *
+       * They sat in the header's action row, drawn exactly like "Invitar
+       * cliente". With three children that row split into thirds below 640px,
+       * and the top of the page carried four bands before the list. Down here,
+       * behind a rule rather than inside a box, the top is header, filters and
+       * list.
+       *
+       * Neither depends on the published catalogue or on being able to invite:
+       * a coach who only attends clients still needs to know what may be asked
+       * of them, so the block is not conditioned on `canInvite`.
+       *
+       * Text links, not buttons. The design system's `link` variant keeps the
+       * button's height and padding and only underlines on hover, so it still
+       * read as a control. These carry the same resting underline as the
+       * client's name in the table above.
+       */}
+      <nav data-client-references aria-label="Consultas sobre los clientes">
+        <Link
+          data-client-reference
+          href={`/organizations/${current.organization_id}/clients/information-categories`}
+        >
+          Categorías de información
+        </Link>
+        <Link
+          data-client-reference
+          href={`/organizations/${current.organization_id}/clients/authorizations`}
+        >
+          Autorizaciones
+        </Link>
+      </nav>
     </section>
   )
 }

@@ -1350,6 +1350,56 @@
   flex: none;
 }
 
+/* -------------------------------------------------------------- references */
+
+/* The client directory's two consultations, closing the section. A rule and
+   space set them apart from the list rather than a box: the page is a spread
+   and has borders enough already. The pair stacks when it does not fit,
+   instead of taking a third of the width each as it did in the action row. */
+[data-client-references] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--afo-space-1) var(--afo-space-5);
+  padding-block-start: var(--afo-space-3);
+  border-block-start: 1px solid var(--afo-color-border-default);
+}
+
+/*
+ * A text link that announces itself without waiting for the cursor and without
+ * asking for a button's weight: underlined at rest in the border grey, turning
+ * the text's own colour when pointed at.
+ *
+ * The token carries its suffix on purpose. `--afo-color-border` does not exist
+ * in the Design System — the names are `-default`, `-subtle`, `-strong` and
+ * `-accent` — and an invalid custom property in `text-decoration-color` or in
+ * `border-color` falls back to `currentcolor`, meaning full ink, which also
+ * leaves `:hover` with nothing to change. Four more rules in this file still
+ * carry the name that does not exist, `data-client-open` among them: the
+ * pattern this one came from. They go in STUDIO-157, because fixing them
+ * changes how other screens look.
+ */
+[data-client-reference] {
+  color: inherit;
+  font-size: var(--afo-font-size-sm);
+  text-decoration: underline;
+  text-decoration-color: var(--afo-color-border-default);
+  text-underline-offset: 3px;
+}
+
+[data-client-reference]:hover {
+  text-decoration-color: currentcolor;
+}
+
+/* One link per line: on a phone the two of them in a row left the second one
+   broken mid-word. */
+@media (max-width: 640px) {
+  [data-client-references] {
+    flex-direction: column;
+    gap: var(--afo-space-3);
+  }
+}
+
 /* ----------------------------------------------------------- relationship */
 
 /* Suplencias is a separate matter from who holds the relationship, so it sits
