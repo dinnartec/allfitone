@@ -24,6 +24,7 @@ import {
   error,
   installStudioApiMock,
   professionalCredential,
+  professionalPracticeOrganization,
   endedRelationshipState,
   professionalProfile,
   holderMembership,
@@ -1573,6 +1574,60 @@ export const SCREENS: Screen[] = [
     fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
     settled: async (page) => {
       await expect(page.getByText('No encontramos esta sede')).toBeVisible()
+    },
+  },
+  // --- `/organizations/[id]/organization/edit` · HU-008 ---
+  {
+    stories: 'HU-008 · update the organization',
+    path: `${workspace}/organization/edit`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toHaveValue('Allfit Gym')
+    },
+  },
+  {
+    // Three fields and two actions in one column: the measure and the rhythm
+    // between the fields are the whole layout here.
+    stories: 'HU-008 · update the organization on a phone',
+    path: `${workspace}/organization/edit`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    viewport: MOBILE,
+    settled: async (page) => {
+      await expect(page.getByLabel('Nombre')).toHaveValue('Allfit Gym')
+    },
+  },
+  {
+    // A gym has no transition out, so the type reads as a settled value with its
+    // reason — a different shape from the field below.
+    stories: 'HU-008 · a type that cannot change',
+    path: `${workspace}/organization/edit`,
+    fixture: () => createStudioApiFixture({ memberships: [activeMembership] }),
+    settled: async (page) => {
+      await expect(page.getByText('El tipo ya no se puede cambiar desde aquí')).toBeVisible()
+    },
+  },
+  {
+    // The one organization that can still become something else, so the only
+    // state in which the type is a control at all.
+    stories: 'HU-008 · a type that can still move',
+    path: `${workspace}/organization/edit`,
+    fixture: () =>
+      createStudioApiFixture({
+        memberships: [activeMembership],
+        organization: structuredClone(professionalPracticeOrganization),
+      }),
+    settled: async (page) => {
+      await expect(page.getByRole('combobox')).toBeVisible()
+    },
+  },
+  {
+    // The refusal, which is a different screen from the form: a role that reads
+    // these data but does not change them.
+    stories: 'HU-008 · a role that does not manage the organization',
+    path: `/organizations/${secondActiveMembership.organization_id}/organization/edit`,
+    fixture: () => createStudioApiFixture({ memberships: [secondActiveMembership] }),
+    settled: async (page) => {
+      await expect(page.getByText('Tu rol no administra la organización')).toBeVisible()
     },
   },
   {

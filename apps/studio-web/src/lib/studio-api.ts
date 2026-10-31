@@ -64,6 +64,7 @@ export type RelationshipTerminationCreate = AllfitV1Schemas['RelationshipTermina
 export type RelationshipSubstitutionTermination =
   AllfitV1Schemas['RelationshipSubstitutionTermination']
 export type Organization = AllfitV1Schemas['Organization']
+export type OrganizationUpdate = AllfitV1Schemas['OrganizationUpdate']
 export type OrganizationSite = AllfitV1Schemas['OrganizationSite']
 export type OrganizationSiteStatus = AllfitV1Schemas['OrganizationSiteStatus']
 export type OrganizationSiteCreate = AllfitV1Schemas['OrganizationSiteCreate']
@@ -543,6 +544,23 @@ export const studioApi = {
 
   organization: (organizationId: string, signal?: AbortSignal) =>
     request<Organization>(`/studio/v1/organizations/${organizationId}`, signal ? { signal } : {}),
+
+  updateOrganization: (
+    organizationId: string,
+    body: OrganizationUpdate,
+    expectedRevision: number,
+    command: CommandHeaders,
+    signal?: AbortSignal,
+  ) =>
+    request<Organization>(`/studio/v1/organizations/${organizationId}`, {
+      method: 'PATCH',
+      headers: commandHeaders(command),
+      // The revision in the body, not in `If-Match`, for the reason spelled out
+      // on `updateOrganizationSite` below: the Edge answers a conditional write
+      // before the function runs.
+      body: JSON.stringify({ ...body, expected_revision: expectedRevision }),
+      ...(signal ? { signal } : {}),
+    }),
 
   createOrganizationSite: (
     organizationId: string,

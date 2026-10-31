@@ -1258,10 +1258,34 @@
 /* The alert states the refusal and the button acts on it; as bare siblings in
    a section they had no space between them and read as one block. The button
    sizes to its label rather than stretching the width of the alert. */
-[data-site-form-refusal] {
+[data-site-form-refusal],
+[data-organization-form-refusal] {
   display: grid;
   justify-items: start;
   gap: var(--afo-space-5);
+}
+
+/* Status and the way to change it share the card's action slot. They are two
+   different kinds of thing, so they get space between them, and they wrap
+   rather than push the card's title out of its own box on a narrow screen. */
+[data-organization-identity-action] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--afo-space-3);
+}
+
+/* The type when it has nowhere to move to. It sits among the form's fields, so
+   it keeps their rhythm, but it is a term and its value — the same pair the read
+   screen shows — rather than a label and a control. */
+[data-organization-type-fixed] {
+  display: grid;
+  gap: var(--afo-space-2);
+}
+
+[data-organization-form-loading] {
+  margin: 0;
+  color: var(--afo-color-text-muted);
 }
 
 /* A site name is one word as often as not, and nothing caps how long that word
@@ -1309,7 +1333,8 @@
   font-size: var(--afo-font-size-lg);
 }
 
-[data-site-status-description] {
+[data-site-status-description],
+[data-organization-type-note] {
   margin: 0;
   max-width: var(--studio-measure);
   color: var(--afo-color-text-muted);
@@ -1320,7 +1345,8 @@
   margin-block-start: var(--afo-space-3);
 }
 
-[data-organization-site-edit] {
+[data-organization-site-edit],
+[data-organization-edit] {
   flex: none;
 }
 
